@@ -1,14 +1,16 @@
 import base64
+import mimetypes
 import os
 import tempfile
 import urllib.parse
 import urllib.request
-import mimetypes
+from pathlib import Path
+from typing import Optional
 
 from .config import settings
 
 
-def save_image_to_temp(url: str) -> str:
+def save_image_to_temp(url: str, workdir: Optional[Path] = None) -> str:
     """Fetch an image URL or data URI to a temporary file and return its path."""
     try:
         if url.startswith("data:"):
@@ -26,7 +28,8 @@ def save_image_to_temp(url: str) -> str:
                 with urllib.request.urlopen(url) as resp:
                     data = resp.read()
                 suffix = os.path.splitext(parsed.path)[1] or ".png"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=settings.codex_workdir) as f:
+        target_dir = str(workdir) if workdir is not None else settings.codex_workdir
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=target_dir) as f:
             f.write(data)
             return f.name
     except Exception as e:

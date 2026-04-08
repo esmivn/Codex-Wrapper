@@ -1,4 +1,5 @@
 import asyncio
+import codecs
 import json
 import logging
 import os
@@ -181,6 +182,25 @@ class _CodexOutputFilter:
         self._emitted_any = True
         return f"{line}\n"
 
+    def can_stream_partial(self, partial_line: str) -> bool:
+        """Return whether an unfinished stdout line is safe to stream immediately."""
+
+        if not partial_line:
+            return False
+        if self._skip_tool_output or self._in_user_block:
+            return False
+
+        stripped = partial_line.strip()
+        if not stripped:
+            return False
+        if _is_metadata_line(stripped):
+            return False
+
+        # Once the assistant marker has appeared, stream incremental text even
+        # before the line terminates so single-line HTML fragments do not wait
+        # for process exit.
+        return self._saw_assistant
+
 
 def _is_metadata_line(text: str) -> bool:
     if _TIMESTAMP_LINE.match(text):
@@ -267,16 +287,28 @@ def _resolve_codex_executable() -> str:
     return exe
 
 
-def _ensure_workdir_exists() -> None:
-    """Ensure Codex working directory exists and is writable, falling back if needed."""
+def _ensure_workdir_exists(workdir: Optional[Path] = None) -> Optional[Path]:
+    """Ensure Codex working directory exists.
+
+    When `workdir` is provided, validate that exact directory and return it.
+    Without an override, preserve the legacy fallback behavior.
+    """
+
+    if workdir is not None:
+        requested_path = Path(workdir).expanduser()
+        requested_path.mkdir(parents=True, exist_ok=True)
+        _verify_directory_write_access(requested_path)
+        with suppress(Exception):
+            return requested_path.resolve()
+        return requested_path
 
     global _WORKDIR_PATH, _WORKDIR_NEEDS_SKIP_GIT_CHECK
     if _WORKDIR_PATH is not None:
-        return
+        return _WORKDIR_PATH
 
     with _WORKDIR_LOCK:
         if _WORKDIR_PATH is not None:
-            return
+            return _WORKDIR_PATH
 
         requested_path = Path(settings.codex_workdir).expanduser()
         candidates: list[Path] = [requested_path]
@@ -326,6 +358,20 @@ def _ensure_workdir_exists() -> None:
         settings.codex_workdir = resolved_str
         _WORKDIR_PATH = resolved
         _WORKDIR_NEEDS_SKIP_GIT_CHECK = not _is_git_repository(resolved)
+        return _WORKDIR_PATH
+
+
+def _resolve_workdir_state(workdir: Optional[Path] = None) -> tuple[Path, bool]:
+    """Return the effective working directory and whether Git repo checks should be skipped."""
+
+    if workdir is not None:
+        resolved = _ensure_workdir_exists(workdir)
+        assert resolved is not None
+        return resolved, not _is_git_repository(resolved)
+
+    resolved = _ensure_workdir_exists()
+    assert resolved is not None
+    return resolved, _WORKDIR_NEEDS_SKIP_GIT_CHECK
 
 
 def _is_git_repository(path: Path) -> bool:
@@ -340,7 +386,7 @@ def _is_git_repository(path: Path) -> bool:
     return False
 
 
-def _resolve_codex_home_dir() -> Path:
+def _resolve_codex_home_dir(workdir: Optional[Path] = None) -> Path:
     """Return the directory Codex CLI uses as its home, ensuring it exists."""
 
     candidates: list[Path] = []
@@ -360,7 +406,8 @@ def _resolve_codex_home_dir() -> Path:
     if default_home not in candidates:
         candidates.append(default_home)
 
-    workspace_home = Path(settings.codex_workdir).expanduser() / ".codex"
+    home_base = workdir if workdir is not None else Path(settings.codex_workdir).expanduser()
+    workspace_home = home_base / ".codex"
     if workspace_home not in candidates:
         candidates.append(workspace_home)
 
@@ -487,10 +534,10 @@ def apply_codex_profile_overrides() -> None:
         logger.info("Applied Codex profile override: %s -> %s", src_path, dest_path)
 
 
-def _build_codex_env() -> Dict[str, str]:
+def _build_codex_env(workdir: Optional[Path] = None) -> Dict[str, str]:
     """Prepare environment variables for Codex subprocesses."""
 
-    codex_home = _resolve_codex_home_dir()
+    codex_home = _resolve_codex_home_dir(workdir)
     env = os.environ.copy()
     env["CODEX_HOME"] = str(codex_home)
 
@@ -534,6 +581,7 @@ def _build_cmd_and_env(
     overrides: Optional[Dict] = None,
     images: Optional[List[str]] = None,
     model: Optional[str] = None,
+    workdir: Optional[Path] = None,
 ) -> list[str]:
     """Build base `codex exec` command with configs and optional images."""
     cfg = {
@@ -572,11 +620,11 @@ def _build_cmd_and_env(
     exe = _resolve_codex_executable()
 
     # Ensure workdir exists (create if missing)
-    _ensure_workdir_exists()
+    _, needs_skip_git_check = _resolve_workdir_state(workdir)
 
     # Note: Rust CLI does not support `-q`. Use human output or JSON mode selectively.
     cmd = [exe, "exec", prompt, "--color", "never"]
-    if _WORKDIR_NEEDS_SKIP_GIT_CHECK:
+    if needs_skip_git_check:
         cmd.append("--skip-git-repo-check")
     if images:
         for img in images:
@@ -943,10 +991,12 @@ async def run_codex(
     overrides: Optional[Dict] = None,
     images: Optional[List[str]] = None,
     model: Optional[str] = None,
+    workdir: Optional[Path] = None,
 ) -> AsyncIterator[str]:
     """Run codex CLI as async generator yielding stdout lines suitable for SSE."""
-    cmd = _build_cmd_and_env(prompt, overrides, images, model)
-    codex_env = _build_codex_env()
+    resolved_workdir, _ = _resolve_workdir_state(workdir)
+    cmd = _build_cmd_and_env(prompt, overrides, images, model, workdir=resolved_workdir)
+    codex_env = _build_codex_env(resolved_workdir)
     output_filter = _CodexOutputFilter()
 
     async with _parallel_limiter.slot():
@@ -955,7 +1005,7 @@ async def run_codex(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=settings.codex_workdir,
+                cwd=str(resolved_workdir),
                 env=codex_env,
                 limit=_ASYNCIO_STREAM_LIMIT,
             )
@@ -970,17 +1020,50 @@ async def run_codex(
         except Exception as e:
             raise CodexError(f"Unable to start codex process: {e}")
 
+        decoder = codecs.getincrementaldecoder("utf-8")("ignore")
         raw_lines: List[str] = []
+        line_buffer = ""
+        emitted_partial_len = 0
         try:
             while True:
-                line = await proc.stdout.readline()
-                if not line:
+                chunk = await proc.stdout.read(1024)
+                if not chunk:
                     break
-                decoded = line.decode(errors="ignore")
+                decoded = decoder.decode(chunk)
+                if not decoded:
+                    continue
                 raw_lines.append(decoded)
-                filtered = output_filter.process(decoded.rstrip("\n"))
+                line_buffer += decoded
+
+                while True:
+                    newline_pos = line_buffer.find("\n")
+                    if newline_pos == -1:
+                        break
+                    complete_line = line_buffer[: newline_pos + 1]
+                    line_buffer = line_buffer[newline_pos + 1 :]
+                    filtered = output_filter.process(complete_line)
+                    if filtered:
+                        suffix = filtered[emitted_partial_len:] if emitted_partial_len else filtered
+                        if suffix:
+                            yield suffix
+                    emitted_partial_len = 0
+
+                if output_filter.can_stream_partial(line_buffer):
+                    suffix = line_buffer[emitted_partial_len:]
+                    if suffix:
+                        emitted_partial_len = len(line_buffer)
+                        yield suffix
+
+            flushed = decoder.decode(b"", final=True)
+            if flushed:
+                raw_lines.append(flushed)
+                line_buffer += flushed
+            if line_buffer:
+                filtered = output_filter.process(line_buffer)
                 if filtered:
-                    yield filtered
+                    suffix = filtered[emitted_partial_len:] if emitted_partial_len else filtered
+                    if suffix:
+                        yield suffix
             await asyncio.wait_for(proc.wait(), timeout=settings.timeout_seconds)
             if proc.returncode != 0:
                 stderr_text = (await proc.stderr.read()).decode(errors="ignore")
@@ -1002,16 +1085,17 @@ async def run_codex_last_message(
     overrides: Optional[Dict] = None,
     images: Optional[List[str]] = None,
     model: Optional[str] = None,
+    workdir: Optional[Path] = None,
 ) -> str:
     """Run codex and return only the final assistant message using --json and --output-last-message.
 
     This avoids human oriented headers and logs from the CLI.
     """
-    cmd = _build_cmd_and_env(prompt, overrides, images, model)
+    resolved_workdir, _ = _resolve_workdir_state(workdir)
+    cmd = _build_cmd_and_env(prompt, overrides, images, model, workdir=resolved_workdir)
     # Create temp file in workdir to ensure permissions
-    _ensure_workdir_exists()
-    codex_env = _build_codex_env()
-    with tempfile.NamedTemporaryFile(prefix="codex-last-", suffix=".txt", dir=settings.codex_workdir, delete=False) as tf:
+    codex_env = _build_codex_env(resolved_workdir)
+    with tempfile.NamedTemporaryFile(prefix="codex-last-", suffix=".txt", dir=resolved_workdir, delete=False) as tf:
         out_path = tf.name
     cmd = cmd + ["--json", "--output-last-message", out_path]
     try:
@@ -1020,7 +1104,7 @@ async def run_codex_last_message(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=settings.codex_workdir,
+                cwd=str(resolved_workdir),
                 env=codex_env,
                 limit=_ASYNCIO_STREAM_LIMIT,
             )

@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 import sys
 
@@ -57,3 +58,70 @@ def test_user_block_is_removed():
     out = [filt.process(line) for line in lines]
     rendered = "".join(part for part in out if part)
     assert rendered.strip() == "神戸の天気は快晴です。"
+
+
+def test_partial_line_can_stream_after_assistant_marker():
+    filt = codex._CodexOutputFilter()
+
+    assert filt.process("Assistant:\n") is None
+    assert filt.can_stream_partial("<p>Hello") is True
+
+
+def test_run_codex_streams_partial_single_line_output(monkeypatch, tmp_path):
+    monkeypatch.setattr(codex.settings, "codex_workdir", str(tmp_path), raising=False)
+    monkeypatch.setattr(codex.settings, "timeout_seconds", 5, raising=False)
+    monkeypatch.setattr(codex, "_WORKDIR_PATH", None, raising=False)
+    monkeypatch.setattr(codex, "_WORKDIR_NEEDS_SKIP_GIT_CHECK", False, raising=False)
+    monkeypatch.setattr(codex, "_build_cmd_and_env", lambda *_, **__: ["codex", "exec"])
+    monkeypatch.setattr(codex, "_build_codex_env", lambda *_, **__: {})
+
+    class FakeStdout:
+        def __init__(self, chunks):
+            self._chunks = list(chunks)
+
+        async def read(self, _n):
+            if self._chunks:
+                return self._chunks.pop(0)
+            return b""
+
+    class FakeStderr:
+        async def read(self):
+            return b""
+
+    class FakeProcess:
+        def __init__(self):
+            self.stdout = FakeStdout(
+                [
+                    b"Assistant:\n",
+                    b"<p>Hello",
+                    b" world",
+                    b"</p>",
+                ]
+            )
+            self.stderr = FakeStderr()
+            self.returncode = 0
+
+        async def wait(self):
+            self.returncode = 0
+            return 0
+
+        def kill(self):
+            self.returncode = 0
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return FakeProcess()
+
+    monkeypatch.setattr(
+        codex.asyncio,
+        "create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+
+    async def _collect():
+        parts = []
+        async for chunk in codex.run_codex("prompt"):
+            parts.append(chunk)
+        return parts
+
+    parts = asyncio.run(_collect())
+    assert parts == ["<p>Hello", " world", "</p>\n"]

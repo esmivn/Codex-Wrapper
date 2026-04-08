@@ -84,8 +84,10 @@ The repository ships sample overrides in `workspace/codex_profile/`:
 
 - `codex_agents.sample.md` → rename/copy to `codex_agents.md`
 - `codex_config.sample.toml` → rename/copy to `codex_config.toml`
+- `system_prompt.sample.md` → rename/copy to `system_prompt.md`
 
 When these files exist, the server copies them into the Codex home (`AGENTS.md` / `config.toml`) at startup. Legacy filenames (`agent.md` / `config.toml`) are still honoured for backwards compatibility, but the wrapper logs a warning so you can migrate safely. The real override files stay ignored by git (see `.gitignore`) to keep local, project-specific instructions out of version control.
+`system_prompt.md` is different: it is not copied into Codex home. Instead, the wrapper reads it on every request and prepends its contents as a server-managed system prompt, after the built-in default rules and before user messages.
 
 5) Environment Variables (.env supported)
 
@@ -179,6 +181,8 @@ This server reads `.env` and uses the following variables. Example values and co
   - Codex merges any `AGENTS.md` files under this directory tree when the wrapper runs requests; copy `docs/examples/AGENTS.example.md` here (or deeper) to provide project instructions.
 - CODEX_CONFIG_DIR: Optional directory treated as `CODEX_HOME` for this wrapper. When set, the server creates it if missing and runs Codex CLI with that directory as its config root; place wrapper-specific `config.toml`, `auth.json`, or MCP settings here.
 - CODEX_WRAPPER_PROFILE_DIR: Optional directory containing `codex_agents.md` / `codex_config.toml` that the wrapper copies into the Codex home before startup. Defaults to `workspace/codex_profile/`; the repository only ships samples (`codex_agents.sample.md`, `codex_config.sample.toml`). Legacy filenames (`agent.md`, `config.toml`) remain supported with a startup warning to ease migration.
+- CODEX_SYSTEM_PROMPT_FILE: Optional path to a Markdown/text file whose contents are appended to the wrapper’s built-in system prompt on every request. If unset, the wrapper looks for `system_prompt.md` under `CODEX_WRAPPER_PROFILE_DIR` (or `workspace/codex_profile/` by default).
+- CODEX_SYSTEM_PROMPT: Optional inline system prompt text appended after the built-in rules and any file-based system prompt.
 - CODEX_MODEL: **Deprecated.** Model selection is automatic; setting this variable has no effect (a warning is logged if present).
   - Note: The string is free‑form, but it must be a model name supported by the selected `model_provider` (OpenAI by default).
 - CODEX_SANDBOX_MODE: Sandbox mode. One of: `read-only` | `workspace-write` | `danger-full-access`.

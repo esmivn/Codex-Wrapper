@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Codex Chat</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3efe6;
+      --panel: rgba(255, 252, 246, 0.92);
+      --panel-strong: #fffdf8;
+      --border: rgba(58, 47, 34, 0.16);
+      --text: #1d1a16;
+      --muted: #685f54;
+      --accent: #0d7a5f;
+      --accent-strong: #085744;
+      --user: #1d4ed8;
+      --assistant: #0f766e;
+      --error: #b42318;
+      --shadow: 0 20px 50px rgba(44, 34, 24, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(13, 122, 95, 0.14), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(29, 78, 216, 0.12), transparent 26%),
+        linear-gradient(180deg, #f7f1e7 0%, #efe6d7 100%);
+    }
+
+    .shell {
+      max-width: 1460px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+
+    .hero {
+      margin-bottom: 20px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(249,244,235,0.82));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 750px;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr) 280px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .sidebar {
+      padding: 18px;
+      position: sticky;
+      top: 16px;
+    }
+
+    .sidebar-right {
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+    }
+
+    .sidebar-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .section-title {
+      margin: 0 0 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    input[type="password"],
+    input[type="text"],
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel-strong);
+      color: var(--text);
+      padding: 12px 14px;
+      font: inherit;
+      outline: none;
+      transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+    }
+
+    input[readonly] {
+      background: rgba(39, 33, 28, 0.04);
+      color: var(--muted);
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(13, 122, 95, 0.55);
+      box-shadow: 0 0 0 4px rgba(13, 122, 95, 0.12);
+    }
+
+    textarea {
+      min-height: 130px;
+      resize: vertical;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .checkbox-row label {
+      margin: 0;
+      font-weight: 600;
+    }
+
+    .hint {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .hidden-control {
+      display: none !important;
+    }
+
+    .sidebar-primary-action {
+      width: 100%;
+      display: block;
+    }
+
+    .sidebar-primary-action button {
+      width: 100%;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #fff;
+    }
+
+    .secondary {
+      background: rgba(39, 33, 28, 0.08);
+      color: var(--text);
+    }
+
+    .chat {
+      display: flex;
+      flex-direction: column;
+      min-height: 72vh;
+      overflow: hidden;
+    }
+
+    .chat-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 20px 12px;
+      border-bottom: 1px solid rgba(58, 47, 34, 0.1);
+    }
+
+    .chat-head h2 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+
+    .messages {
+      flex: 1;
+      overflow: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .empty {
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px dashed rgba(58, 47, 34, 0.18);
+      color: var(--muted);
+      background: rgba(255,255,255,0.45);
+    }
+
+    .message {
+      max-width: min(760px, 88%);
+      padding: 14px 16px;
+      border-radius: 18px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid rgba(58, 47, 34, 0.08);
+      animation: reveal 180ms ease;
+    }
+
+    .message a {
+      color: inherit;
+      font-weight: 700;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 0.15em;
+    }
+
+    .message-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message-content {
+      min-width: 0;
+    }
+
+    .streaming-inline {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    .assistant-waiting {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 72px;
+    }
+
+    .assistant-waiting img {
+      display: block;
+      width: 132px;
+      max-width: min(100%, 132px);
+      height: auto;
+      border-radius: 10px;
+    }
+
+    .streaming-caret {
+      display: inline-block;
+      width: 0.62em;
+      height: 1.1em;
+      background: currentColor;
+      border-radius: 2px;
+      transform: translateY(0.08em);
+      animation: blink 1s steps(1, end) infinite;
+      opacity: 0.88;
+    }
+
+    .assistant-preview-shell {
+      width: 100%;
+      min-height: 88px;
+      overflow: hidden;
+      border-radius: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    .assistant-preview {
+      width: 100%;
+      height: 100%;
+      min-height: 88px;
+      border: 0;
+      display: block;
+      background: transparent;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: rgba(29, 78, 216, 0.08);
+      color: #0f2348;
+      border-color: rgba(29, 78, 216, 0.14);
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.96);
+      color: #0e3f37;
+      border-color: rgba(29, 26, 22, 0.18);
+      position: relative;
+      min-width: 220px;
+      min-height: 96px;
+    }
+
+    .assistant-loading {
+      align-self: flex-start;
+      display: flex;
+      flex-direction: column;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      max-width: none;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      white-space: normal;
+    }
+
+    .message.assistant.resizable {
+      overflow: visible;
+    }
+
+    .message.assistant > .role {
+      flex: 0 0 auto;
+    }
+
+    .assistant-loading > .role {
+      display: none;
+    }
+
+    .assistant-loading > .message-content {
+      display: block;
+      min-height: 0;
+    }
+
+    .message.assistant > .message-content {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+    }
+
+    .message.assistant > .message-content > .message-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+    }
+
+    .message.assistant > .message-content > .message-body > .assistant-preview-shell {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    .message.assistant.resizing {
+      user-select: none;
+    }
+
+    .assistant-loading .resize-handle {
+      display: none;
+    }
+
+    .resize-handle {
+      position: absolute;
+      z-index: 3;
+      background: transparent;
+      touch-action: none;
+    }
+
+    .resize-handle::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      background: rgba(13, 122, 95, 0.22);
+      opacity: 0;
+      transition: opacity 120ms ease, background 120ms ease;
+      pointer-events: none;
+    }
+
+    .message.assistant:hover .resize-handle::after,
+    .message.assistant.resizing .resize-handle::after {
+      opacity: 1;
+    }
+
+    .resize-handle:hover::after,
+    .message.assistant.resizing .resize-handle.active::after {
+      background: rgba(13, 122, 95, 0.42);
+    }
+
+    .resize-handle.e {
+      top: 14px;
+      right: -6px;
+      bottom: 14px;
+      width: 12px;
+      cursor: ew-resize;
+    }
+
+    .resize-handle.e::after {
+      top: 0;
+      bottom: 0;
+      left: 4px;
+      width: 4px;
+    }
+
+    .resize-handle.s {
+      left: 14px;
+      right: 14px;
+      bottom: -6px;
+      height: 12px;
+      cursor: ns-resize;
+    }
+
+    .resize-handle.s::after {
+      top: 4px;
+      left: 0;
+      right: 0;
+      height: 4px;
+    }
+
+    .resize-handle.se {
+      right: -6px;
+      bottom: -6px;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+    }
+
+    .resize-handle.se::after {
+      inset: 2px;
+    }
+
+    .message.error {
+      align-self: stretch;
+      max-width: 100%;
+      background: rgba(180, 35, 24, 0.08);
+      color: var(--error);
+      border-color: rgba(180, 35, 24, 0.18);
+    }
+
+    .role {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.72;
+      font-weight: 800;
+    }
+
+    .message.user .role {
+      color: var(--user);
+    }
+
+    .message.assistant .role {
+      color: var(--assistant);
+    }
+
+    .composer {
+      border-top: 1px solid rgba(58, 47, 34, 0.1);
+      padding: 16px 20px 20px;
+      background: rgba(255,255,255,0.42);
+    }
+
+    .composer textarea {
+      min-height: 110px;
+      margin-bottom: 12px;
+    }
+
+    .footer-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .recent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .recent-item {
+      display: block;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(58, 47, 34, 0.1);
+      background: rgba(255, 255, 255, 0.58);
+      color: var(--text);
+      text-decoration: none;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .recent-item:hover {
+      transform: translateY(-1px);
+      border-color: rgba(13, 122, 95, 0.25);
+      background: rgba(255, 255, 255, 0.86);
+    }
+
+    .recent-item.current {
+      border-color: rgba(13, 122, 95, 0.32);
+      background: rgba(13, 122, 95, 0.08);
+    }
+
+    .recent-item-title {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .recent-item-meta {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .recent-empty {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    @keyframes reveal {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes blink {
+      0%, 45% {
+        opacity: 0.9;
+      }
+      46%, 100% {
+        opacity: 0.15;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 300px minmax(0, 1fr);
+      }
+
+      .sidebar-right {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 920px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+      }
+
+      .chat {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <h1>Codex Chat</h1>
+      <p>直接在网页里聊天，就能让 AI 助手执行任务、生成文件，并把结果以可直接打开的页面或链接返回给你。</p>
+    </section>
+
+    <div class="layout">
+      <aside class="card sidebar sidebar-left sidebar-compact">
+        <div class="actions sidebar-primary-action">
+          <button id="new-chat" class="secondary" type="button">新对话</button>
+        </div>
+
+        <div class="field">
+          <label for="model">Model</label>
+          <select id="model"></select>
+          <div class="hint">优先选择实际可用的模型，例如 <code>gpt-5</code> 或 <code>gpt-5.1 high</code>。</div>
+        </div>
+
+        <div class="hidden-control" aria-hidden="true">
+          <label for="api-key">Bearer Token</label>
+          <input id="api-key" type="password" placeholder="可留空" autocomplete="off" />
+          <label for="reasoning">Reasoning Alias</label>
+          <input id="reasoning" type="text" placeholder="例如：gpt-5.1 high" />
+          <label for="chat-id">Chat ID</label>
+          <input id="chat-id" type="text" readonly />
+          <code id="workspace-path"></code>
+          <code id="public-base"></code>
+          <input id="stream" type="checkbox" checked />
+          <button id="reload-models" class="secondary" type="button">加载模型</button>
+        </div>
+      </aside>
+
+      <section class="card chat">
+        <div class="chat-head">
+          <div>
+            <h2>Browser Interface</h2>
+            <div class="status" id="status">就绪</div>
+          </div>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="composer">
+          <label for="prompt">Message</label>
+          <textarea id="prompt" placeholder="输入你想让代理执行的任务"></textarea>
+          <div class="actions">
+            <button id="send" class="primary" type="button">发送</button>
+          </div>
+          <div class="footer-note">Enter 发送，Shift + Enter 换行。发送时会自动携带当前对话历史，并把会话绑定到 URL 里的 <code>chat_id</code>。</div>
+        </div>
+      </section>
+
+      <aside class="card sidebar sidebar-right">
+        <h2 class="section-title">最近会话</h2>
+        <div id="recent-sessions" class="recent-list"></div>
+        <div id="recent-empty" class="recent-empty">还没有历史会话。</div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const apiKeyInput = document.getElementById("api-key");
+    const modelSelect = document.getElementById("model");
+    const reasoningInput = document.getElementById("reasoning");
+    const chatIdInput = document.getElementById("chat-id");
+    const workspacePathEl = document.getElementById("workspace-path");
+    const publicBaseEl = document.getElementById("public-base");
+    const streamToggle = document.getElementById("stream");
+    const reloadModelsButton = document.getElementById("reload-models");
+    const newChatButton = document.getElementById("new-chat");
+    const sendButton = document.getElementById("send");
+    const promptInput = document.getElementById("prompt");
+    const messagesEl = document.getElementById("messages");
+    const emptyStateEl = document.getElementById("empty-state");
+    const statusEl = document.getElementById("status");
+    const recentSessionsEl = document.getElementById("recent-sessions");
+    const recentEmptyEl = document.getElementById("recent-empty");
+
+    const storageKeys = {
+      apiKey: "codex-wrapper.chat.apiKey",
+      model: "codex-wrapper.chat.model",
+      reasoning: "codex-wrapper.chat.reasoning",
+      stream: "codex-wrapper.chat.stream"
+    };
+
+    const conversation = [];
+    let activeController = null;
+    const defaultUserId = "default";
+    const chatIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+    const waitingGifUrl = "/static/typing-animation.gif";
+    const popupWindowName = "codex-wrapper-popup";
+    const popupWindowFeatures = [
+      "popup=yes",
+      "width=1280",
+      "height=900",
+      "left=120",
+      "top=80",
+      "resizable=yes",
+      "scrollbars=yes"
+    ].join(",");
+    let currentChatId = "";
+    let previewCounter = 0;
+    let activeResize = null;
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function generateChatId() {
+      return `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function normalizeChatId(value) {
+      const candidate = (value || "").trim();
+      return chatIdPattern.test(candidate) ? candidate : "";
+    }
+
+    function currentPublicBase() {
+      return `/workspace/${defaultUserId}/${currentChatId}/`;
+    }
+
+    function openInPopup(url) {
+      const popup = window.open(new URL(url, window.location.href).href, popupWindowName, popupWindowFeatures);
+      if (popup) {
+        popup.focus();
+        return true;
+      }
+      setStatus("浏览器拦截了弹窗，请允许本站点打开弹窗后再试");
+      return false;
+    }
+
+    function applySessionUi() {
+      chatIdInput.value = currentChatId;
+      workspacePathEl.textContent = `/workspace/${defaultUserId}/${currentChatId}`;
+      publicBaseEl.textContent = currentPublicBase();
+    }
+
+    function updateChatUrl(chatId, { replace = false } = {}) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("chat_id", chatId);
+      const method = replace ? "replaceState" : "pushState";
+      window.history[method]({}, "", url);
+    }
+
+    function ensureChatId({ replace = false } = {}) {
+      const url = new URL(window.location.href);
+      const existing = normalizeChatId(url.searchParams.get("chat_id"));
+      currentChatId = existing || generateChatId();
+      updateChatUrl(currentChatId, { replace: replace || !existing });
+      applySessionUi();
+    }
+
+    function authHeaders() {
+      const headers = {};
+      const apiKey = apiKeyInput.value.trim();
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
+      return headers;
+    }
+
+    function persistSettings() {
+      localStorage.setItem(storageKeys.apiKey, apiKeyInput.value);
+      localStorage.setItem(storageKeys.model, modelSelect.value);
+      localStorage.setItem(storageKeys.reasoning, reasoningInput.value);
+      localStorage.setItem(storageKeys.stream, String(streamToggle.checked));
+    }
+
+    function restoreSettings() {
+      apiKeyInput.value = localStorage.getItem(storageKeys.apiKey) || "";
+      reasoningInput.value = localStorage.getItem(storageKeys.reasoning) || "";
+      streamToggle.checked = (localStorage.getItem(storageKeys.stream) || "true") !== "false";
+    }
+
+    function removeEmptyState() {
+      if (emptyStateEl && emptyStateEl.parentNode) {
+        emptyStateEl.parentNode.removeChild(emptyStateEl);
+      }
+    }
+
+    function sessionChatUrl(chatId) {
+      const url = new URL(window.location.href);
+      url.pathname = "/chat";
+      url.searchParams.set("chat_id", chatId);
+      return url.pathname + url.search;
+    }
+
+    function formatSessionTime(value) {
+      if (!value) {
+        return "";
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "";
+      }
+      return date.toLocaleString();
+    }
+
+    function renderRecentSessions(items) {
+      recentSessionsEl.innerHTML = "";
+      const sessions = Array.isArray(items) ? items : [];
+      recentEmptyEl.hidden = sessions.length > 0;
+
+      for (const item of sessions) {
+        const link = document.createElement("a");
+        link.className = "recent-item";
+        if (item.chat_id === currentChatId) {
+          link.classList.add("current");
+        }
+        link.href = sessionChatUrl(item.chat_id);
+
+        const title = document.createElement("span");
+        title.className = "recent-item-title";
+        title.textContent = item.chat_id;
+        link.appendChild(title);
+
+        const meta = document.createElement("span");
+        meta.className = "recent-item-meta";
+        const count = typeof item.message_count === "number" ? `${item.message_count} 条消息` : "";
+        const updated = formatSessionTime(item.updated_at);
+        meta.textContent = [count, updated].filter(Boolean).join(" · ");
+        link.appendChild(meta);
+
+        recentSessionsEl.appendChild(link);
+      }
+    }
+
+    function assistantPreviewAvailableHeight(frame) {
+      const content = frame.closest(".message-content");
+      if (!content) {
+        return 88;
+      }
+      return Math.max(88, Math.floor(content.clientHeight));
+    }
+
+    function syncPreviewFrameSize(frame, contentHeight = null) {
+      if (!frame) {
+        return;
+      }
+      const availableHeight = assistantPreviewAvailableHeight(frame);
+      const storedHeight = Number.parseFloat(frame.dataset.contentHeight || "0") || 0;
+      const intrinsicHeight = contentHeight ?? storedHeight;
+      const nextHeight = Math.max(88, availableHeight, intrinsicHeight);
+      frame.style.height = `${nextHeight}px`;
+      const shell = frame.closest(".assistant-preview-shell");
+      if (shell) {
+        shell.style.height = `${nextHeight}px`;
+      }
+    }
+
+    function attachResizeHandles(messageEl) {
+      if (messageEl.dataset.resizableAttached === "true") {
+        return;
+      }
+      messageEl.dataset.resizableAttached = "true";
+      messageEl.classList.add("resizable");
+
+      for (const direction of ["e", "s", "se"]) {
+        const handle = document.createElement("span");
+        handle.className = `resize-handle ${direction}`;
+        handle.dataset.direction = direction;
+        handle.setAttribute("aria-hidden", "true");
+        handle.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = messageEl.getBoundingClientRect();
+          const styles = getComputedStyle(messageEl);
+          messageEl.style.width = `${rect.width}px`;
+          messageEl.style.height = `${Math.max(rect.height, parseFloat(styles.minHeight) || 96)}px`;
+          messageEl.classList.add("resizing");
+          handle.classList.add("active");
+          activeResize = {
+            element: messageEl,
+            handle,
+            direction,
+            startX: event.clientX,
+            startY: event.clientY,
+            startWidth: rect.width,
+            startHeight: rect.height
+          };
+          handle.setPointerCapture(event.pointerId);
+        });
+        messageEl.appendChild(handle);
+      }
+    }
+
+    async function loadRecentSessions() {
+      try {
+        const response = await fetch("/v1/chat/sessions?limit=10", {
+          headers: {
+            ...authHeaders()
+          }
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail || payload));
+        }
+        renderRecentSessions(payload.data || []);
+      } catch (_error) {
+        renderRecentSessions([]);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function renderPlainTextContent(node, content, { streaming = false } = {}) {
+      const text = content || "";
+      const fragment = document.createDocumentFragment();
+      const parts = text.split(/(https?:\/\/[^\s]+|\/workspace\/[^\s]+)/g);
+
+      for (const part of parts) {
+        if (!part) {
+          continue;
+        }
+        if (/^(https?:\/\/|\/workspace\/)/.test(part)) {
+          const anchor = document.createElement("a");
+          anchor.href = part;
+          anchor.textContent = part;
+          anchor.dataset.popupLink = "true";
+          fragment.appendChild(anchor);
+          continue;
+        }
+        fragment.appendChild(document.createTextNode(part));
+      }
+
+      if (streaming) {
+        const inline = document.createElement("span");
+        inline.className = "streaming-inline";
+        inline.appendChild(fragment);
+
+        const caret = document.createElement("span");
+        caret.className = "streaming-caret";
+        caret.setAttribute("aria-hidden", "true");
+        inline.appendChild(caret);
+        node.replaceChildren(inline);
+        return;
+      }
+
+      node.replaceChildren(fragment);
+    }
+
+    function renderWaitingIndicator(node) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "assistant-waiting";
+
+      const image = document.createElement("img");
+      image.src = waitingGifUrl;
+      image.alt = "Waiting for assistant response";
+      image.loading = "eager";
+      wrapper.appendChild(image);
+
+      node.replaceChildren(wrapper);
+    }
+
+    function looksLikeHtmlFragment(content) {
+      const text = (content || "").trim();
+      return /<([a-z][\w:-]*|!doctype|html|body)\b/i.test(text);
+    }
+
+    function previewBaseHref() {
+      return new URL(currentPublicBase(), window.location.href).href;
+    }
+
+    function buildAssistantPreviewDocument(fragment, previewId) {
+      const resolvedBaseHref = previewBaseHref();
+      const baseHref = escapeHtml(resolvedBaseHref);
+      return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <base href="${baseHref}" target="_blank" />
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #161616;
+    }
+    body {
+      padding: 0;
+      background: transparent;
+    }
+    img, video, canvas, svg, iframe {
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+${fragment}
+  <script>
+(() => {
+  const previewId = ${JSON.stringify(previewId)};
+  const previewBaseHref = ${JSON.stringify(resolvedBaseHref)};
+  const popupWindowName = "codex-wrapper-popup";
+  const popupWindowFeatures = ${JSON.stringify([
+    "popup=yes",
+    "width=1280",
+    "height=900",
+    "left=120",
+    "top=80",
+    "resizable=yes",
+    "scrollbars=yes"
+  ].join(","))};
+  const openPopup = (href) => {
+    try {
+      const popup = window.open(new URL(href, previewBaseHref).href, popupWindowName, popupWindowFeatures);
+      if (popup) {
+        popup.focus();
+        return;
+      }
+    } catch (error) {
+      parent.postMessage({ type: "codex-wrapper-popup-error", message: String(error) }, "*");
+    }
+    parent.postMessage({ type: "codex-wrapper-popup-blocked", href }, "*");
+  };
+  const report = () => {
+    const body = document.body;
+    const html = document.documentElement;
+    const height = Math.max(
+      body ? body.scrollHeight : 0,
+      body ? body.offsetHeight : 0,
+      html ? html.scrollHeight : 0,
+      html ? html.offsetHeight : 0,
+      88
+    );
+    parent.postMessage({ type: "codex-wrapper-preview-height", previewId, height }, "*");
+  };
+  document.addEventListener("click", (event) => {
+    const anchor = event.target.closest("a[href]");
+    if (!anchor) {
+      return;
+    }
+    event.preventDefault();
+    openPopup(anchor.href);
+  });
+  new MutationObserver(report).observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true
+  });
+  window.addEventListener("load", report);
+  window.addEventListener("resize", report);
+  setTimeout(report, 0);
+  setTimeout(report, 120);
+  setTimeout(report, 400);
+})();
+<\/script>
+</body>
+</html>`;
+    }
+
+    function renderAssistantContent(node, content, { final = true } = {}) {
+      const text = content || "";
+
+      if (!final && !text.trim()) {
+        renderWaitingIndicator(node);
+        return;
+      }
+
+      if (!final || !looksLikeHtmlFragment(text)) {
+        renderPlainTextContent(node, text, { streaming: !final });
+        return;
+      }
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "message-body";
+
+      const previewShell = document.createElement("div");
+      previewShell.className = "assistant-preview-shell";
+
+      const iframe = document.createElement("iframe");
+      const previewId = `preview-${++previewCounter}`;
+      iframe.className = "assistant-preview";
+      iframe.dataset.previewId = previewId;
+      iframe.loading = "lazy";
+      iframe.referrerPolicy = "no-referrer";
+      iframe.setAttribute(
+        "sandbox",
+        "allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"
+      );
+      iframe.srcdoc = buildAssistantPreviewDocument(text, previewId);
+      previewShell.appendChild(iframe);
+      wrapper.appendChild(previewShell);
+
+      node.replaceChildren(wrapper);
+      requestAnimationFrame(() => syncPreviewFrameSize(iframe));
+    }
+
+    function renderMessageContent(node, role, content, options = {}) {
+      const articleEl = node.closest("article");
+      if (role === "assistant") {
+        const isPending = !(options.final ?? true) && !(content || "").trim();
+        if (articleEl) {
+          articleEl.className = isPending ? "assistant-loading" : "message assistant";
+        }
+        if (!isPending && articleEl && !articleEl.classList.contains("error")) {
+          attachResizeHandles(articleEl);
+        }
+        renderAssistantContent(node, content, options);
+        return;
+      }
+      renderPlainTextContent(node, content);
+    }
+
+    function appendMessage(role, content, extraClass = "", options = {}) {
+      removeEmptyState();
+      const wrapper = document.createElement("article");
+      const isAssistantPending =
+        role === "assistant" && options.pendingBare && !(options.final ?? true) && !(content || "").trim();
+      wrapper.className = isAssistantPending ? "assistant-loading" : `message ${role} ${extraClass}`.trim();
+
+      const roleLabel = document.createElement("span");
+      roleLabel.className = "role";
+      roleLabel.textContent = role === "user" ? "User" : role === "assistant" ? "Assistant" : "System";
+      wrapper.appendChild(roleLabel);
+
+      const body = document.createElement("div");
+      body.className = "message-content";
+      wrapper.appendChild(body);
+      const final = options.final ?? true;
+      renderMessageContent(body, role, content, { final });
+
+      if (role === "assistant" && !isAssistantPending && !extraClass.includes("error")) {
+        attachResizeHandles(wrapper);
+      }
+
+      messagesEl.appendChild(wrapper);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return body;
+    }
+
+    function addConversationMessage(role, content) {
+      conversation.push({ role, content });
+      appendMessage(role, content);
+    }
+
+    function currentModel() {
+      const override = reasoningInput.value.trim();
+      return override || modelSelect.value || "gpt-5";
+    }
+
+    async function loadModels() {
+      setStatus("正在加载模型...");
+      persistSettings();
+      try {
+        const response = await fetch("/v1/models", {
+          headers: {
+            ...authHeaders()
+          }
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail || payload));
+        }
+
+        const previous = localStorage.getItem(storageKeys.model);
+        modelSelect.innerHTML = "";
+        for (const entry of payload.data || []) {
+          const option = document.createElement("option");
+          option.value = entry.id;
+          option.textContent = entry.id;
+          modelSelect.appendChild(option);
+        }
+
+        if (previous && Array.from(modelSelect.options).some((option) => option.value === previous)) {
+          modelSelect.value = previous;
+        } else if (Array.from(modelSelect.options).some((option) => option.value === "gpt-5")) {
+          modelSelect.value = "gpt-5";
+        }
+
+        persistSettings();
+        setStatus(`模型已加载，共 ${modelSelect.options.length} 个`);
+      } catch (error) {
+        setStatus(`加载模型失败：${error.message}`);
+        appendMessage("system", `加载模型失败：${error.message}`, "error");
+      }
+    }
+
+    function resetConversationState() {
+      conversation.length = 0;
+      promptInput.value = "";
+      messagesEl.innerHTML = "";
+      promptInput.focus();
+    }
+
+    async function loadConversation() {
+      setStatus("正在加载会话...");
+      try {
+        const response = await fetch(`/v1/chat/sessions/${encodeURIComponent(currentChatId)}`, {
+          headers: {
+            ...authHeaders()
+          }
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail || payload));
+        }
+
+        resetConversationState();
+        for (const message of payload.messages || []) {
+          if (typeof message?.role === "string") {
+            addConversationMessage(message.role, typeof message.content === "string" ? message.content : JSON.stringify(message.content));
+          }
+        }
+
+        workspacePathEl.textContent = payload.workdir || `/workspace/${defaultUserId}/${currentChatId}`;
+        publicBaseEl.textContent = payload.public_base_url || currentPublicBase();
+        setStatus(payload.messages?.length ? "已恢复会话" : "新会话就绪");
+        loadRecentSessions();
+      } catch (error) {
+        resetConversationState();
+        setStatus(`加载会话失败：${error.message}`);
+      }
+    }
+
+    async function sendMessage() {
+      const text = promptInput.value.trim();
+      if (!text) {
+        setStatus("请输入消息");
+        return;
+      }
+
+      persistSettings();
+      addConversationMessage("user", text);
+      promptInput.value = "";
+      sendButton.disabled = true;
+      reloadModelsButton.disabled = true;
+      newChatButton.disabled = true;
+      setStatus(streamToggle.checked ? "流式输出中..." : "请求发送中...");
+
+      const assistantNode = appendMessage("assistant", "", "", { final: false, pendingBare: true });
+      const controller = new AbortController();
+      activeController = controller;
+      const requestBody = {
+        model: currentModel(),
+        messages: conversation.map((message) => ({
+          role: message.role,
+          content: message.content
+        })),
+        stream: streamToggle.checked,
+        x_codex: {
+          chat_id: currentChatId,
+          user_id: defaultUserId
+        }
+      };
+
+      try {
+        const response = await fetch("/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders()
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(
+            typeof payload.detail === "string"
+              ? payload.detail
+              : (payload.detail && payload.detail.message) || JSON.stringify(payload.detail || payload)
+          );
+        }
+
+        if (!streamToggle.checked) {
+          const payload = await response.json();
+          const content = payload.choices?.[0]?.message?.content || "";
+          if (activeController !== controller) {
+            return;
+          }
+          renderMessageContent(assistantNode, "assistant", content, { final: true });
+          conversation.push({ role: "assistant", content });
+          setStatus("完成");
+          loadRecentSessions();
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let finalText = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() || "";
+
+          for (const chunk of chunks) {
+            const line = chunk.trim();
+            if (!line.startsWith("data:")) {
+              continue;
+            }
+            const data = line.slice(5).trim();
+            if (data === "[DONE]") {
+              continue;
+            }
+            const payload = JSON.parse(data);
+            const delta = payload.choices?.[0]?.delta?.content || "";
+            if (delta) {
+              if (activeController !== controller) {
+                return;
+              }
+              finalText += delta;
+              renderMessageContent(assistantNode, "assistant", finalText, { final: false });
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+              setStatus("流式输出中...");
+            }
+          }
+        }
+
+        if (activeController !== controller) {
+          return;
+        }
+        renderMessageContent(assistantNode, "assistant", finalText, { final: true });
+        conversation.push({ role: "assistant", content: finalText });
+        setStatus("完成");
+        loadRecentSessions();
+      } catch (error) {
+        if (error.name === "AbortError") {
+          if (assistantNode.parentElement) {
+            assistantNode.parentElement.remove();
+          }
+          setStatus("已开始新对话");
+          return;
+        }
+        assistantNode.parentElement.classList.add("error");
+        renderMessageContent(assistantNode, "system", error.message);
+        setStatus(`失败：${error.message}`);
+      } finally {
+        if (activeController === controller) {
+          activeController = null;
+        }
+        sendButton.disabled = false;
+        reloadModelsButton.disabled = false;
+        newChatButton.disabled = false;
+      }
+    }
+
+    function clearConversation() {
+      if (activeController) {
+        activeController.abort();
+        activeController = null;
+      }
+      currentChatId = generateChatId();
+      updateChatUrl(currentChatId);
+      applySessionUi();
+      resetConversationState();
+      setStatus("已开始新对话");
+      loadRecentSessions();
+    }
+
+    apiKeyInput.addEventListener("change", persistSettings);
+    reasoningInput.addEventListener("change", persistSettings);
+    streamToggle.addEventListener("change", persistSettings);
+    modelSelect.addEventListener("change", persistSettings);
+    reloadModelsButton.addEventListener("click", loadModels);
+    newChatButton.addEventListener("click", clearConversation);
+    sendButton.addEventListener("click", sendMessage);
+    promptInput.addEventListener("keydown", (event) => {
+      if (event.isComposing) {
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+
+    restoreSettings();
+    ensureChatId({ replace: true });
+    loadModels();
+    loadConversation();
+    loadRecentSessions();
+
+    messagesEl.addEventListener("click", (event) => {
+      const anchor = event.target.closest("a[href]");
+      if (!anchor) {
+        return;
+      }
+      event.preventDefault();
+      openInPopup(anchor.href);
+    });
+
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+      if (data && data.type === "codex-wrapper-popup-blocked") {
+        setStatus("浏览器拦截了弹窗，请允许本站点打开弹窗后再试");
+        return;
+      }
+      if (data && data.type === "codex-wrapper-open-popup" && data.href) {
+        openInPopup(data.href);
+        return;
+      }
+      if (!data || data.type !== "codex-wrapper-preview-height" || !data.previewId) {
+        return;
+      }
+      const frame = document.querySelector(`iframe[data-preview-id="${data.previewId}"]`);
+      if (frame && Number.isFinite(data.height)) {
+        frame.dataset.contentHeight = String(Math.max(88, Math.ceil(data.height)));
+        syncPreviewFrameSize(frame, Math.max(88, Math.ceil(data.height)));
+      }
+    });
+
+    window.addEventListener("pointermove", (event) => {
+      if (!activeResize) {
+        return;
+      }
+      const { element, direction, startX, startY, startWidth, startHeight } = activeResize;
+      const dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      const maxWidth = Math.max(220, messagesEl.clientWidth - 12);
+      const nextWidth = direction.includes("e") ? Math.min(maxWidth, Math.max(220, startWidth + dx)) : startWidth;
+      const nextHeight = direction.includes("s") ? Math.max(96, startHeight + dy) : startHeight;
+      element.style.width = `${nextWidth}px`;
+      element.style.height = `${nextHeight}px`;
+      const frame = element.querySelector(".assistant-preview");
+      if (frame) {
+        syncPreviewFrameSize(frame);
+      }
+    });
+
+    window.addEventListener("pointerup", () => {
+      if (!activeResize) {
+        return;
+      }
+      activeResize.element.classList.remove("resizing");
+      activeResize.handle.classList.remove("active");
+      activeResize = null;
+    });
+
+    window.addEventListener("pointercancel", () => {
+      if (!activeResize) {
+        return;
+      }
+      activeResize.element.classList.remove("resizing");
+      activeResize.handle.classList.remove("active");
+      activeResize = null;
+    });
+  </script>
+</body>
+</html>

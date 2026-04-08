@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     codex_profile_dir: Optional[str] = Field(
         default=None, alias="CODEX_WRAPPER_PROFILE_DIR"
     )
+    codex_system_prompt: Optional[str] = Field(
+        default=None, alias="CODEX_SYSTEM_PROMPT"
+    )
+    codex_system_prompt_file: Optional[str] = Field(
+        default=None, alias="CODEX_SYSTEM_PROMPT_FILE"
+    )
     codex_path: str = Field(default="codex", alias="CODEX_PATH")
     codex_node_path: Optional[str] = Field(default=None, alias="CODEX_NODE_PATH")
     approval_policy: Optional[str] = Field(default=None, alias="CODEX_APPROVAL_POLICY")

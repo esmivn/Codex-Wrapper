@@ -15,6 +15,8 @@ class XCodexOptions(BaseModel):
     reasoning_effort: Optional[str] = None
     network_access: Optional[bool] = None
     hide_reasoning: Optional[bool] = None
+    chat_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 
 class ChatCompletionRequest(BaseModel):

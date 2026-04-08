@@ -1,4 +1,23 @@
+from pathlib import Path
 from typing import List, Dict, Any, Tuple
+
+from .config import settings
+
+
+_DEFAULT_PROFILE_DIR = Path(__file__).resolve().parent.parent / "workspace" / "codex_profile"
+_DEFAULT_WRAPPER_SYSTEM_PROMPT = """Wrapper execution rules:
+- Treat the current working directory as the primary workspace for this request.
+- Create user-facing files inside the current working directory unless the user explicitly asks otherwise.
+- Always format the final assistant response as an HTML fragment that can be rendered directly in a browser chat interface.
+- Do not wrap the response in Markdown fences.
+- Use normal HTML elements for rich output such as <img>, <audio>, <video>, <canvas>, <svg>, <a>, <button>, and inline <script> when needed.
+- Keep the fragment self-contained with inline CSS/JS unless the user explicitly asks for separate files.
+- If you create a browser-viewable artifact such as HTML, return its final HTTP link inside the HTML fragment when one is available.
+- Prefer sharing the public URL instead of an inaccessible local filesystem path when the user needs to open a file.
+- Keep generated files organized inside the session workspace and avoid writing outside it unless required.
+- If a plain text answer would normally be enough, wrap it in simple HTML such as <p>...</p>.
+- When you mention a generated file, prefer a clickable <a href="...">...</a> link.
+- Do not add target attributes, window.open calls, or inline click handlers to links; the frontend controls how links open."""
 
 
 def _content_to_text(content: Any) -> str:
@@ -50,9 +69,40 @@ def _extract_images(content: Any) -> List[str]:
     return images
 
 
-def build_prompt_and_images(messages: List[Dict[str, Any]]) -> Tuple[str, List[str]]:
+def load_wrapper_system_prompt_parts() -> List[str]:
+    """Return server-managed system prompt parts that should apply to every request."""
+
+    parts: List[str] = [_DEFAULT_WRAPPER_SYSTEM_PROMPT]
+
+    configured_file = settings.codex_system_prompt_file
+    if configured_file:
+        candidate = Path(configured_file).expanduser()
+    else:
+        profile_dir = (
+            Path(settings.codex_profile_dir).expanduser()
+            if settings.codex_profile_dir
+            else _DEFAULT_PROFILE_DIR
+        )
+        candidate = profile_dir / "system_prompt.md"
+
+    if candidate.is_file():
+        text = candidate.read_text(encoding="utf-8").strip()
+        if text:
+            parts.append(text)
+
+    inline_prompt = (settings.codex_system_prompt or "").strip()
+    if inline_prompt:
+        parts.append(inline_prompt)
+
+    return parts
+
+
+def build_prompt_and_images(
+    messages: List[Dict[str, Any]],
+    injected_system_parts: List[str] | None = None,
+) -> Tuple[str, List[str]]:
     """Convert chat messages into a prompt string and collect image URLs."""
-    system_parts: List[str] = []
+    system_parts: List[str] = [part.strip() for part in (injected_system_parts or []) if part and part.strip()]
     convo: List[Dict[str, Any]] = []
     images: List[str] = []
 
