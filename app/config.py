@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     )
     codex_path: str = Field(default="codex", alias="CODEX_PATH")
     codex_node_path: Optional[str] = Field(default=None, alias="CODEX_NODE_PATH")
+    approval_policy: Optional[str] = Field(default=None, alias="CODEX_APPROVAL_POLICY")
     sandbox_mode: str = Field(default="read-only", alias="CODEX_SANDBOX_MODE")
     workspace_network_access: bool = Field(
         default=False, alias="CODEX_WORKSPACE_NETWORK_ACCESS"

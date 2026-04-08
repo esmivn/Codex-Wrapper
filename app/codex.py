@@ -540,6 +540,8 @@ def _build_cmd_and_env(
         "sandbox_mode": settings.sandbox_mode,
         "hide_agent_reasoning": settings.hide_reasoning,
     }
+    if settings.approval_policy:
+        cfg["approval_policy"] = settings.approval_policy
     default_effort = (
         settings.reasoning_effort.strip().lower()
         if isinstance(settings.reasoning_effort, str)

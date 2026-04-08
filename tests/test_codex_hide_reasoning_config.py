@@ -28,3 +28,16 @@ def test_override_can_disable_hide_reasoning(monkeypatch, tmp_path):
     cmd = codex._build_cmd_and_env("prompt text", overrides={"hide_reasoning": False})
     assert "--config" in cmd
     assert any(part == "hide_agent_reasoning=false" for part in cmd)
+
+
+def test_approval_policy_from_settings_is_passed_to_codex(monkeypatch, tmp_path):
+    monkeypatch.setattr(codex.settings, "approval_policy", "never", raising=False)
+    monkeypatch.setattr(codex.settings, "hide_reasoning", False, raising=False)
+    monkeypatch.setattr(codex.settings, "codex_workdir", str(tmp_path), raising=False)
+    fake_codex = tmp_path / "codex"
+    fake_codex.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_codex.chmod(0o755)
+    monkeypatch.setattr(codex.settings, "codex_path", str(fake_codex), raising=False)
+    cmd = codex._build_cmd_and_env("prompt text")
+    assert "--config" in cmd
+    assert any(part == 'approval_policy="never"' for part in cmd)

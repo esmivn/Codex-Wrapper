@@ -14,6 +14,9 @@ services:
       CODEX_HOME: /home/codex/.codex
       CODEX_WORKDIR: /workspace
       CODEX_PATH: codex
+      CODEX_APPROVAL_POLICY: never
+      CODEX_SANDBOX_MODE: danger-full-access
+      CODEX_ALLOW_DANGER_FULL_ACCESS: "1"
     ports:
       - "8020:8000"
     volumes:

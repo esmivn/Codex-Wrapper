@@ -146,6 +146,7 @@ docker compose up
 ```
 
 Notes
+- The compose file sets `CODEX_APPROVAL_POLICY=never` and `CODEX_SANDBOX_MODE=danger-full-access` by default so Codex can run non-interactively inside the container. This is intentionally high-trust and should be used only in isolated environments.
 - The compose file bind-mounts `${HOME}/.codex` into the container so it reuses the same Codex credentials you already configured in WSL. Make sure the directory exists (`mkdir -p ~/.codex`) before running `docker compose`.
 - `.env` is loaded via `env_file` to keep configuration in sync with non-container runs.
 - The container exposes the same `/v1/models` discovery as the bare-metal setup because the server still shells out to the bundled Codex CLI (`codex models list`).
@@ -170,6 +171,9 @@ This server reads `.env` and uses the following variables. Example values and co
 - PROXY_API_KEY: API token for this wrapper. If unset, the server can run without auth.
 - RATE_LIMIT_PER_MINUTE: Allowed requests per minute. 0 disables limiting.
 - CODEX_PATH: Path to the `codex` binary. Default `codex`.
+- CODEX_APPROVAL_POLICY: Optional approval policy override passed to Codex CLI. Common values are `untrusted`, `on-request`, and `never`.
+  - Leave unset to use the CLI default.
+  - Set `never` in isolated containers/CI when you want Codex to run without approval prompts.
 - CODEX_WORKDIR: Working directory for Codex executions (`cwd`). Default `/workspace`.
   - Ensure this directory is writable by the server user; otherwise Codex fails with `Failed to create CODEX_WORKDIR ... Read-only file system`.
   - Codex merges any `AGENTS.md` files under this directory tree when the wrapper runs requests; copy `docs/examples/AGENTS.example.md` here (or deeper) to provide project instructions.

@@ -14,6 +14,9 @@ This project loads configuration via environment variables. It supports a `.env`
 - `RATE_LIMIT_PER_MINUTE`: Requests per minute allowed per client. `0` disables limiting.
 - `HOST_UID` / `HOST_GID`: UID/GID assigned to the `codex` user inside the Docker image (default `1000`). Set these to match the host user when bind-mounting `$HOME/.codex` so the container can reuse existing Codex credentials.
 - `CODEX_PATH`: Path to `codex` binary (default: `codex`).
+- `CODEX_APPROVAL_POLICY`: Optional Codex approval policy override. Typical values are `untrusted`, `on-request`, or `never`.
+  - Leave this unset to keep the Codex CLI default.
+  - For isolated containers/CI where no user approval prompts should appear, set `CODEX_APPROVAL_POLICY=never`.
 - `CODEX_WORKDIR`: Working directory for Codex runs (server enforces `cwd` to this path).
   - Codex はこのディレクトリ階層で `AGENTS.md` を探索します。ラッパー API 特有の指示を適用したい場合は、ここ（または配下のサブディレクトリ）に `AGENTS.md` を配置してください。
 - `CODEX_CONFIG_DIR`: Optional directory to use as the Codex CLI home for this wrapper. When set, the server exports `CODEX_HOME` for subprocesses and guarantees the folder exists. Place your API-specific `config.toml` here.
