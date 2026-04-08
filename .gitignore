@@ -12,3 +12,4 @@ workspace/codex_profile/agent.md
 workspace/codex_profile/config.toml
 .credential.md
 app/__pycache__
+app/.DS_Store
