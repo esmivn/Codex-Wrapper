@@ -534,7 +534,10 @@ def apply_codex_profile_overrides() -> None:
         logger.info("Applied Codex profile override: %s -> %s", src_path, dest_path)
 
 
-def _build_codex_env(workdir: Optional[Path] = None) -> Dict[str, str]:
+def _build_codex_env(
+    workdir: Optional[Path] = None,
+    env_overrides: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
     """Prepare environment variables for Codex subprocesses."""
 
     codex_home = _resolve_codex_home_dir(workdir)
@@ -573,6 +576,12 @@ def _build_codex_env(workdir: Optional[Path] = None) -> Dict[str, str]:
                 if shutil.which("node", path=os.pathsep.join(path_parts)) is not None:
                     env["PATH"] = os.pathsep.join(path_parts)
                     break
+    if env_overrides:
+        for key, value in env_overrides.items():
+            if value is None:
+                env.pop(key, None)
+            else:
+                env[key] = str(value)
     return env
 
 
@@ -645,7 +654,10 @@ def _build_cmd_and_env(
             continue
         # Use TOML-style quoting for strings
         if isinstance(value, str):
-            cmd += ["--config", f"{key}=\"{value}\""]
+            if key.startswith("model_providers."):
+                cmd += ["--config", f"{key}={value}"]
+            else:
+                cmd += ["--config", f"{key}=\"{value}\""]
         elif isinstance(value, bool):
             bool_value = "true" if value else "false"
             cmd += ["--config", f"{key}={bool_value}"]
@@ -992,11 +1004,12 @@ async def run_codex(
     images: Optional[List[str]] = None,
     model: Optional[str] = None,
     workdir: Optional[Path] = None,
+    env_overrides: Optional[Dict[str, str]] = None,
 ) -> AsyncIterator[str]:
     """Run codex CLI as async generator yielding stdout lines suitable for SSE."""
     resolved_workdir, _ = _resolve_workdir_state(workdir)
     cmd = _build_cmd_and_env(prompt, overrides, images, model, workdir=resolved_workdir)
-    codex_env = _build_codex_env(resolved_workdir)
+    codex_env = _build_codex_env(resolved_workdir, env_overrides=env_overrides)
     output_filter = _CodexOutputFilter()
 
     async with _parallel_limiter.slot():
@@ -1086,6 +1099,7 @@ async def run_codex_last_message(
     images: Optional[List[str]] = None,
     model: Optional[str] = None,
     workdir: Optional[Path] = None,
+    env_overrides: Optional[Dict[str, str]] = None,
 ) -> str:
     """Run codex and return only the final assistant message using --json and --output-last-message.
 
@@ -1094,7 +1108,7 @@ async def run_codex_last_message(
     resolved_workdir, _ = _resolve_workdir_state(workdir)
     cmd = _build_cmd_and_env(prompt, overrides, images, model, workdir=resolved_workdir)
     # Create temp file in workdir to ensure permissions
-    codex_env = _build_codex_env(resolved_workdir)
+    codex_env = _build_codex_env(resolved_workdir, env_overrides=env_overrides)
     with tempfile.NamedTemporaryFile(prefix="codex-last-", suffix=".txt", dir=resolved_workdir, delete=False) as tf:
         out_path = tf.name
     cmd = cmd + ["--json", "--output-last-message", out_path]

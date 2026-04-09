@@ -1,5 +1,6 @@
 import json
 import os
+from base64 import b64encode
 
 import pytest
 
@@ -39,7 +40,7 @@ def test_save_and_load_session_messages(monkeypatch, tmp_path):
 
     payload = [
         {"role": "user", "content": "hello"},
-        {"role": "assistant", "content": "world"},
+        {"role": "assistant", "content": "world", "model": "gpt-5.1 high"},
     ]
     session = session_workspace.save_session_messages("chat-abc123", payload)
 
@@ -74,4 +75,77 @@ def test_list_recent_sessions_sorts_by_latest_update(monkeypatch, tmp_path):
     items = session_workspace.list_recent_sessions(limit=10)
 
     assert [item["chat_id"] for item in items[:2]] == ["chat-new", "chat-old"]
+    assert items[0]["title"] == "chat-new"
     assert items[0]["preview"] == "newer message"
+
+
+def test_delete_session_workspace_removes_chat_directory(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        session_workspace.settings, "codex_workdir", str(tmp_path), raising=False
+    )
+
+    session = session_workspace.save_session_messages(
+        "chat-delete-me",
+        [{"role": "assistant", "content": "bye"}],
+    )
+    sample_file = session.session_dir / "artifact.txt"
+    sample_file.write_text("cleanup", encoding="utf-8")
+    sample_file.chmod(0o400)
+
+    deleted = session_workspace.delete_session_workspace("chat-delete-me")
+
+    assert deleted.chat_id == "chat-delete-me"
+    assert not session.session_dir.exists()
+
+
+def test_save_uploaded_file_uses_session_workspace(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        session_workspace.settings, "codex_workdir", str(tmp_path), raising=False
+    )
+
+    payload = b64encode(b"hello upload").decode("utf-8")
+    saved = session_workspace.save_uploaded_file(
+        "chat-upload",
+        filename="demo file.txt",
+        content_base64=payload,
+    )
+
+    target = tmp_path / "default" / "chat-upload" / saved["relative_path"]
+    assert target.read_bytes() == b"hello upload"
+    assert saved["name"].startswith("demo-file")
+
+
+def test_list_session_files_ignores_hidden_entries(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        session_workspace.settings, "codex_workdir", str(tmp_path), raising=False
+    )
+
+    session = session_workspace.ensure_session_workspace("chat-files")
+    (session.session_dir / "visible.txt").write_text("ok", encoding="utf-8")
+    hidden_dir = session.session_dir / ".codex-wrapper"
+    hidden_dir.mkdir(parents=True, exist_ok=True)
+    (hidden_dir / "messages.json").write_text("[]", encoding="utf-8")
+
+    files = session_workspace.list_session_files("chat-files")
+
+    assert [item["relative_path"] for item in files] == ["visible.txt"]
+
+
+def test_list_recent_sessions_title_uses_first_user_message(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        session_workspace.settings, "codex_workdir", str(tmp_path), raising=False
+    )
+
+    session_workspace.save_session_messages(
+        "chat-title",
+        [
+            {"role": "assistant", "content": "intro"},
+            {"role": "user", "content": "Please review the quarterly retention dashboard and summarize risks"},
+            {"role": "assistant", "content": "done"},
+        ],
+    )
+
+    items = session_workspace.list_recent_sessions(limit=10)
+
+    assert items[0]["chat_id"] == "chat-title"
+    assert items[0]["title"] == "Please review the quarterly retention dashboard and summarize..."

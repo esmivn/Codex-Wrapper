@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 class ChatMessage(BaseModel):
     role: str
+    model: Optional[str] = None
     # Accept both legacy string content and the newer array-of-parts format
     # seen in modern OpenAI-compatible clients (e.g., [{type:"text", text:"..."}]).
     # Keep this permissive to avoid 422 for clients sending mixed shapes.
@@ -26,6 +27,15 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     x_codex: Optional[XCodexOptions] = None
+
+
+class SessionFileUploadItem(BaseModel):
+    name: str
+    content_base64: str
+
+
+class SessionFileUploadRequest(BaseModel):
+    files: List[SessionFileUploadItem]
 
 
 class ChatMessageResponse(BaseModel):

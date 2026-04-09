@@ -21,6 +21,22 @@
       --shadow: 0 20px 50px rgba(44, 34, 24, 0.12);
     }
 
+    body[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f1318;
+      --panel: rgba(21, 28, 34, 0.92);
+      --panel-strong: #192129;
+      --border: rgba(187, 211, 226, 0.16);
+      --text: #edf4f7;
+      --muted: #9eb0bc;
+      --accent: #24a985;
+      --accent-strong: #15725b;
+      --user: #8ab4ff;
+      --assistant: #5fd7c0;
+      --error: #ff8f87;
+      --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+
     * {
       box-sizing: border-box;
     }
@@ -34,6 +50,13 @@
         radial-gradient(circle at top left, rgba(13, 122, 95, 0.14), transparent 30%),
         radial-gradient(circle at bottom right, rgba(29, 78, 216, 0.12), transparent 26%),
         linear-gradient(180deg, #f7f1e7 0%, #efe6d7 100%);
+    }
+
+    body[data-theme="dark"] {
+      background:
+        radial-gradient(circle at top left, rgba(36, 169, 133, 0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(91, 119, 255, 0.16), transparent 24%),
+        linear-gradient(180deg, #0d1218 0%, #131a22 100%);
     }
 
     .shell {
@@ -52,11 +75,22 @@
       backdrop-filter: blur(10px);
     }
 
+    body[data-theme="dark"] .hero {
+      background:
+        radial-gradient(circle at top left, rgba(36, 169, 133, 0.18), transparent 38%),
+        linear-gradient(135deg, rgba(19, 27, 35, 0.96), rgba(14, 19, 26, 0.92));
+      border-color: rgba(187, 211, 226, 0.14);
+    }
+
     .hero h1 {
       margin: 0 0 8px;
       font-size: clamp(2rem, 4vw, 3.4rem);
       line-height: 0.95;
       letter-spacing: -0.05em;
+    }
+
+    body[data-theme="dark"] .hero h1 {
+      color: #eef7fa;
     }
 
     .hero p {
@@ -173,7 +207,6 @@
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin-top: 16px;
     }
 
     .hidden-control {
@@ -187,6 +220,14 @@
 
     .sidebar-primary-action button {
       width: 100%;
+    }
+
+    .sidebar-theme-action button {
+      width: 100%;
+    }
+
+    .model-search {
+      margin-bottom: 10px;
     }
 
     button {
@@ -217,6 +258,10 @@
     .secondary {
       background: rgba(39, 33, 28, 0.08);
       color: var(--text);
+    }
+
+    body[data-theme="dark"] .secondary {
+      background: rgba(255, 255, 255, 0.08);
     }
 
     .chat {
@@ -305,8 +350,8 @@
 
     .assistant-waiting img {
       display: block;
-      width: 132px;
-      max-width: min(100%, 132px);
+      width: 60px;
+      max-width: min(100%, 60px);
       height: auto;
       border-radius: 10px;
     }
@@ -347,6 +392,12 @@
       border-color: rgba(29, 78, 216, 0.14);
     }
 
+    body[data-theme="dark"] .message.user {
+      background: rgba(138, 180, 255, 0.12);
+      color: #dce9ff;
+      border-color: rgba(138, 180, 255, 0.18);
+    }
+
     .message.assistant {
       align-self: flex-start;
       display: flex;
@@ -357,6 +408,12 @@
       position: relative;
       min-width: 220px;
       min-height: 96px;
+    }
+
+    body[data-theme="dark"] .message.assistant {
+      background: rgba(19, 27, 35, 0.96);
+      color: #dcf7f1;
+      border-color: rgba(187, 211, 226, 0.18);
     }
 
     .assistant-loading {
@@ -492,6 +549,10 @@
       border-color: rgba(180, 35, 24, 0.18);
     }
 
+    body[data-theme="dark"] .composer {
+      background: rgba(7, 11, 16, 0.28);
+    }
+
     .role {
       display: block;
       margin-bottom: 6px;
@@ -521,6 +582,58 @@
       margin-bottom: 12px;
     }
 
+    .upload-panel {
+      margin-bottom: 12px;
+    }
+
+    .upload-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .upload-note {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .file-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .file-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(58, 47, 34, 0.12);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.78rem;
+      line-height: 1.25;
+    }
+
+    .file-chip-name {
+      min-width: 0;
+      max-width: 280px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .file-chip-size {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
     .footer-note {
       margin-top: 10px;
       color: var(--muted);
@@ -535,14 +648,19 @@
     }
 
     .recent-item {
-      display: block;
-      padding: 10px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 10px 10px 12px;
       border-radius: 14px;
       border: 1px solid rgba(58, 47, 34, 0.1);
       background: rgba(255, 255, 255, 0.58);
-      color: var(--text);
-      text-decoration: none;
       transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    body[data-theme="dark"] .recent-item {
+      background: rgba(24, 32, 40, 0.96);
+      border-color: rgba(187, 211, 226, 0.12);
     }
 
     .recent-item:hover {
@@ -551,9 +669,26 @@
       background: rgba(255, 255, 255, 0.86);
     }
 
+    body[data-theme="dark"] .recent-item:hover {
+      border-color: rgba(95, 215, 192, 0.24);
+      background: rgba(28, 39, 49, 0.98);
+    }
+
     .recent-item.current {
       border-color: rgba(13, 122, 95, 0.32);
       background: rgba(13, 122, 95, 0.08);
+    }
+
+    body[data-theme="dark"] .recent-item.current {
+      border-color: rgba(95, 215, 192, 0.28);
+      background: rgba(19, 57, 54, 0.52);
+    }
+
+    .recent-item-link {
+      flex: 1 1 auto;
+      min-width: 0;
+      color: var(--text);
+      text-decoration: none;
     }
 
     .recent-item-title {
@@ -569,6 +704,30 @@
       color: var(--muted);
       font-size: 0.78rem;
       line-height: 1.45;
+    }
+
+    .recent-delete {
+      flex: 0 0 auto;
+      align-self: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(180, 35, 24, 0.1);
+      color: var(--error);
+      font-size: 0.76rem;
+      font-weight: 800;
+    }
+
+    .recent-delete:hover:not(:disabled) {
+      background: rgba(180, 35, 24, 0.18);
+    }
+
+    body[data-theme="dark"] .recent-delete {
+      background: rgba(255, 143, 135, 0.14);
+      color: #ffb1ab;
+    }
+
+    body[data-theme="dark"] .recent-delete:hover:not(:disabled) {
+      background: rgba(255, 143, 135, 0.22);
     }
 
     .recent-empty {
@@ -638,8 +797,13 @@
           <button id="new-chat" class="secondary" type="button">新对话</button>
         </div>
 
+        <div class="actions sidebar-theme-action">
+          <button id="theme-toggle" class="secondary" type="button">Dark Mode</button>
+        </div>
+
         <div class="field">
           <label for="model">Model</label>
+          <input id="model-search" class="model-search" type="text" placeholder="搜索模型" autocomplete="off" />
           <select id="model"></select>
           <div class="hint">优先选择实际可用的模型，例如 <code>gpt-5</code> 或 <code>gpt-5.1 high</code>。</div>
         </div>
@@ -670,6 +834,14 @@
 
         <div class="composer">
           <label for="prompt">Message</label>
+          <div class="upload-panel">
+            <div class="upload-actions">
+              <button id="upload-trigger" class="secondary" type="button">上传文件</button>
+              <input id="file-input" class="hidden-control" type="file" multiple />
+              <span class="upload-note">上传后的文件会保存到当前会话目录，并自动提供给 Codex 使用。</span>
+            </div>
+            <div id="session-files" class="file-list"></div>
+          </div>
           <textarea id="prompt" placeholder="输入你想让代理执行的任务"></textarea>
           <div class="actions">
             <button id="send" class="primary" type="button">发送</button>
@@ -689,6 +861,7 @@
   <script>
     const apiKeyInput = document.getElementById("api-key");
     const modelSelect = document.getElementById("model");
+    const modelSearchInput = document.getElementById("model-search");
     const reasoningInput = document.getElementById("reasoning");
     const chatIdInput = document.getElementById("chat-id");
     const workspacePathEl = document.getElementById("workspace-path");
@@ -696,6 +869,9 @@
     const streamToggle = document.getElementById("stream");
     const reloadModelsButton = document.getElementById("reload-models");
     const newChatButton = document.getElementById("new-chat");
+    const themeToggleButton = document.getElementById("theme-toggle");
+    const uploadTrigger = document.getElementById("upload-trigger");
+    const fileInput = document.getElementById("file-input");
     const sendButton = document.getElementById("send");
     const promptInput = document.getElementById("prompt");
     const messagesEl = document.getElementById("messages");
@@ -703,12 +879,14 @@
     const statusEl = document.getElementById("status");
     const recentSessionsEl = document.getElementById("recent-sessions");
     const recentEmptyEl = document.getElementById("recent-empty");
+    const sessionFilesEl = document.getElementById("session-files");
 
     const storageKeys = {
       apiKey: "codex-wrapper.chat.apiKey",
       model: "codex-wrapper.chat.model",
       reasoning: "codex-wrapper.chat.reasoning",
-      stream: "codex-wrapper.chat.stream"
+      stream: "codex-wrapper.chat.stream",
+      theme: "codex-wrapper.chat.theme"
     };
 
     const conversation = [];
@@ -729,9 +907,22 @@
     let currentChatId = "";
     let previewCounter = 0;
     let activeResize = null;
+    let allModelIds = [];
+    let preferredDefaultModel = "";
+    let currentSessionFiles = [];
+    let rememberedModelSelection = "";
+    let currentTheme = "light";
+    const messageState = new WeakMap();
 
     function setStatus(text) {
       statusEl.textContent = text;
+    }
+
+    function applyTheme(theme) {
+      currentTheme = theme === "dark" ? "dark" : "light";
+      document.body.dataset.theme = currentTheme;
+      themeToggleButton.textContent = currentTheme === "dark" ? "Light Mode" : "Dark Mode";
+      refreshRenderedAssistantMessages();
     }
 
     function generateChatId() {
@@ -789,15 +980,21 @@
 
     function persistSettings() {
       localStorage.setItem(storageKeys.apiKey, apiKeyInput.value);
-      localStorage.setItem(storageKeys.model, modelSelect.value);
+      if (modelSelect.value) {
+        rememberedModelSelection = modelSelect.value;
+        localStorage.setItem(storageKeys.model, modelSelect.value);
+      }
       localStorage.setItem(storageKeys.reasoning, reasoningInput.value);
       localStorage.setItem(storageKeys.stream, String(streamToggle.checked));
+      localStorage.setItem(storageKeys.theme, currentTheme);
     }
 
     function restoreSettings() {
       apiKeyInput.value = localStorage.getItem(storageKeys.apiKey) || "";
+      rememberedModelSelection = localStorage.getItem(storageKeys.model) || "";
       reasoningInput.value = localStorage.getItem(storageKeys.reasoning) || "";
       streamToggle.checked = (localStorage.getItem(storageKeys.stream) || "true") !== "false";
+      applyTheme(localStorage.getItem(storageKeys.theme) || "light");
     }
 
     function removeEmptyState() {
@@ -830,26 +1027,141 @@
       recentEmptyEl.hidden = sessions.length > 0;
 
       for (const item of sessions) {
-        const link = document.createElement("a");
-        link.className = "recent-item";
+        const row = document.createElement("div");
+        row.className = "recent-item";
         if (item.chat_id === currentChatId) {
-          link.classList.add("current");
+          row.classList.add("current");
         }
+
+        const link = document.createElement("a");
+        link.className = "recent-item-link";
         link.href = sessionChatUrl(item.chat_id);
 
         const title = document.createElement("span");
         title.className = "recent-item-title";
-        title.textContent = item.chat_id;
+        title.textContent = (item.title || item.chat_id || "").trim();
         link.appendChild(title);
 
         const meta = document.createElement("span");
         meta.className = "recent-item-meta";
         const count = typeof item.message_count === "number" ? `${item.message_count} 条消息` : "";
         const updated = formatSessionTime(item.updated_at);
-        meta.textContent = [count, updated].filter(Boolean).join(" · ");
+        meta.textContent = [item.chat_id, count, updated].filter(Boolean).join(" · ");
         link.appendChild(meta);
 
-        recentSessionsEl.appendChild(link);
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "recent-delete";
+        deleteButton.type = "button";
+        deleteButton.textContent = "删除";
+        deleteButton.setAttribute("aria-label", `删除会话 ${item.chat_id}`);
+        deleteButton.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          await deleteSession(item.chat_id, deleteButton);
+        });
+
+        row.appendChild(link);
+        row.appendChild(deleteButton);
+        recentSessionsEl.appendChild(row);
+      }
+    }
+
+    function formatFileSize(size) {
+      const value = Number(size) || 0;
+      if (value >= 1024 * 1024) {
+        return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+      }
+      if (value >= 1024) {
+        return `${Math.round(value / 1024)} KB`;
+      }
+      return `${value} B`;
+    }
+
+    function sessionFileUrl(relativePath) {
+      return `${currentPublicBase()}${relativePath}`;
+    }
+
+    function renderSessionFiles(items) {
+      currentSessionFiles = Array.isArray(items) ? items.slice() : [];
+      sessionFilesEl.innerHTML = "";
+      for (const item of currentSessionFiles) {
+        if (!item || typeof item.relative_path !== "string") {
+          continue;
+        }
+        const link = document.createElement("a");
+        link.className = "file-chip";
+        link.href = item.public_url || sessionFileUrl(item.relative_path);
+        link.dataset.popupLink = "true";
+
+        const name = document.createElement("span");
+        name.className = "file-chip-name";
+        name.textContent = item.relative_path;
+        link.appendChild(name);
+
+        const size = document.createElement("span");
+        size.className = "file-chip-size";
+        size.textContent = formatFileSize(item.size);
+        link.appendChild(size);
+
+        sessionFilesEl.appendChild(link);
+      }
+    }
+
+    async function fileToBase64(file) {
+      const buffer = await file.arrayBuffer();
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      const chunkSize = 0x8000;
+      for (let index = 0; index < bytes.length; index += chunkSize) {
+        const chunk = bytes.subarray(index, index + chunkSize);
+        binary += String.fromCharCode(...chunk);
+      }
+      return btoa(binary);
+    }
+
+    async function uploadFiles(fileList) {
+      const files = Array.from(fileList || []);
+      if (!files.length) {
+        return;
+      }
+      uploadTrigger.disabled = true;
+      sendButton.disabled = true;
+      newChatButton.disabled = true;
+      setStatus(`正在上传 ${files.length} 个文件...`);
+
+      try {
+        const payload = {
+          files: await Promise.all(
+            files.map(async (file) => ({
+              name: file.name,
+              content_base64: await fileToBase64(file)
+            }))
+          )
+        };
+
+        const response = await fetch(`/v1/chat/sessions/${encodeURIComponent(currentChatId)}/files`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders()
+          },
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail || body));
+        }
+
+        workspacePathEl.textContent = body.workdir || `/workspace/${defaultUserId}/${currentChatId}`;
+        renderSessionFiles(body.files || body.data || []);
+        setStatus(`已上传 ${files.length} 个文件`);
+      } catch (error) {
+        setStatus(`上传失败：${error.message}`);
+      } finally {
+        fileInput.value = "";
+        uploadTrigger.disabled = false;
+        sendButton.disabled = false;
+        newChatButton.disabled = false;
       }
     }
 
@@ -914,7 +1226,7 @@
 
     async function loadRecentSessions() {
       try {
-        const response = await fetch("/v1/chat/sessions?limit=10", {
+        const response = await fetch("/v1/chat/sessions?limit=6", {
           headers: {
             ...authHeaders()
           }
@@ -926,6 +1238,51 @@
         renderRecentSessions(payload.data || []);
       } catch (_error) {
         renderRecentSessions([]);
+      }
+    }
+
+    async function deleteSession(chatId, triggerButton = null) {
+      if (!chatId) {
+        return;
+      }
+      const confirmed = window.confirm(`确认删除会话 ${chatId} 吗？这会删除该会话目录及其中所有文件。`);
+      if (!confirmed) {
+        return;
+      }
+
+      if (triggerButton) {
+        triggerButton.disabled = true;
+      }
+      const deletingCurrent = chatId === currentChatId;
+      if (deletingCurrent && activeController) {
+        activeController.abort();
+        activeController = null;
+      }
+
+      try {
+        const response = await fetch(`/v1/chat/sessions/${encodeURIComponent(chatId)}`, {
+          method: "DELETE",
+          headers: {
+            ...authHeaders()
+          }
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail || payload));
+        }
+
+        if (deletingCurrent) {
+          clearConversation({ statusText: "当前会话已删除，已切换到新对话" });
+          return;
+        }
+        setStatus(`已删除会话 ${chatId}`);
+        loadRecentSessions();
+      } catch (error) {
+        setStatus(`删除失败：${error.message}`);
+      } finally {
+        if (triggerButton) {
+          triggerButton.disabled = false;
+        }
       }
     }
 
@@ -999,6 +1356,7 @@
     function buildAssistantPreviewDocument(fragment, previewId) {
       const resolvedBaseHref = previewBaseHref();
       const baseHref = escapeHtml(resolvedBaseHref);
+      const isDarkTheme = currentTheme === "dark";
       return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1007,18 +1365,21 @@
   <base href="${baseHref}" target="_blank" />
   <style>
     :root {
-      color-scheme: light;
+      color-scheme: ${isDarkTheme ? "dark" : "light"};
       font-family: Georgia, "Times New Roman", serif;
     }
     html, body {
       margin: 0;
       padding: 0;
-      background: #fff;
-      color: #161616;
+      background: transparent;
+      color: ${isDarkTheme ? "#edf4f7" : "#161616"};
     }
     body {
       padding: 0;
       background: transparent;
+    }
+    a {
+      color: ${isDarkTheme ? "#8ab4ff" : "#0d5bd7"};
     }
     img, video, canvas, svg, iframe {
       max-width: 100%;
@@ -1128,19 +1489,62 @@ ${fragment}
     }
 
     function renderMessageContent(node, role, content, options = {}) {
+      const state = {
+        role,
+        content,
+        final: options.final ?? true,
+        modelLabel: options.modelLabel || ""
+      };
+      messageState.set(node, state);
       const articleEl = node.closest("article");
       if (role === "assistant") {
-        const isPending = !(options.final ?? true) && !(content || "").trim();
+        const isPending = !state.final && !(content || "").trim();
         if (articleEl) {
           articleEl.className = isPending ? "assistant-loading" : "message assistant";
         }
+        updateRoleLabel(node, role, options.modelLabel);
         if (!isPending && articleEl && !articleEl.classList.contains("error")) {
           attachResizeHandles(articleEl);
         }
         renderAssistantContent(node, content, options);
         return;
       }
+      updateRoleLabel(node, role, options.modelLabel);
       renderPlainTextContent(node, content);
+    }
+
+    function refreshRenderedAssistantMessages() {
+      const nodes = messagesEl.querySelectorAll(".message-content");
+      for (const node of nodes) {
+        const state = messageState.get(node);
+        if (!state || state.role !== "assistant") {
+          continue;
+        }
+        renderMessageContent(node, state.role, state.content, {
+          final: state.final,
+          modelLabel: state.modelLabel
+        });
+      }
+    }
+
+    function roleLabelText(role, modelLabel = "") {
+      if (role === "assistant") {
+        const normalizedModel = String(modelLabel || "").trim();
+        return normalizedModel ? `ASSISTANT (${normalizedModel})` : "ASSISTANT";
+      }
+      if (role === "user") {
+        return "User";
+      }
+      return "System";
+    }
+
+    function updateRoleLabel(node, role, modelLabel = "") {
+      const articleEl = node.closest("article");
+      const roleEl = articleEl?.querySelector(".role");
+      if (!roleEl) {
+        return;
+      }
+      roleEl.textContent = roleLabelText(role, modelLabel);
     }
 
     function appendMessage(role, content, extraClass = "", options = {}) {
@@ -1152,14 +1556,14 @@ ${fragment}
 
       const roleLabel = document.createElement("span");
       roleLabel.className = "role";
-      roleLabel.textContent = role === "user" ? "User" : role === "assistant" ? "Assistant" : "System";
+      roleLabel.textContent = roleLabelText(role, options.modelLabel);
       wrapper.appendChild(roleLabel);
 
       const body = document.createElement("div");
       body.className = "message-content";
       wrapper.appendChild(body);
       const final = options.final ?? true;
-      renderMessageContent(body, role, content, { final });
+      renderMessageContent(body, role, content, { final, modelLabel: options.modelLabel });
 
       if (role === "assistant" && !isAssistantPending && !extraClass.includes("error")) {
         attachResizeHandles(wrapper);
@@ -1170,9 +1574,13 @@ ${fragment}
       return body;
     }
 
-    function addConversationMessage(role, content) {
-      conversation.push({ role, content });
-      appendMessage(role, content);
+    function addConversationMessage(role, content, options = {}) {
+      const entry = { role, content };
+      if (role === "assistant" && options.modelLabel) {
+        entry.model = options.modelLabel;
+      }
+      conversation.push(entry);
+      appendMessage(role, content, "", { modelLabel: options.modelLabel });
     }
 
     function currentModel() {
@@ -1180,9 +1588,39 @@ ${fragment}
       return override || modelSelect.value || "gpt-5";
     }
 
+    function populateModelOptions(selectedValue = "") {
+      const search = (modelSearchInput.value || "").trim().toLowerCase();
+      const visibleModels = search
+        ? allModelIds.filter((modelId) => modelId.toLowerCase().includes(search))
+        : allModelIds.slice();
+
+      modelSelect.innerHTML = "";
+      for (const modelId of visibleModels) {
+        const option = document.createElement("option");
+        option.value = modelId;
+        option.textContent = modelId;
+        modelSelect.appendChild(option);
+      }
+
+      if (selectedValue && visibleModels.includes(selectedValue)) {
+        modelSelect.value = selectedValue;
+        return;
+      }
+      if (preferredDefaultModel && visibleModels.includes(preferredDefaultModel)) {
+        modelSelect.value = preferredDefaultModel;
+        return;
+      }
+      if (visibleModels.includes("gpt-5.1 high")) {
+        modelSelect.value = "gpt-5.1 high";
+        return;
+      }
+      if (modelSelect.options.length > 0) {
+        modelSelect.selectedIndex = 0;
+      }
+    }
+
     async function loadModels() {
       setStatus("正在加载模型...");
-      persistSettings();
       try {
         const response = await fetch("/v1/models", {
           headers: {
@@ -1194,23 +1632,16 @@ ${fragment}
           throw new Error(typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail || payload));
         }
 
-        const previous = localStorage.getItem(storageKeys.model);
-        modelSelect.innerHTML = "";
-        for (const entry of payload.data || []) {
-          const option = document.createElement("option");
-          option.value = entry.id;
-          option.textContent = entry.id;
-          modelSelect.appendChild(option);
-        }
-
-        if (previous && Array.from(modelSelect.options).some((option) => option.value === previous)) {
-          modelSelect.value = previous;
-        } else if (Array.from(modelSelect.options).some((option) => option.value === "gpt-5")) {
-          modelSelect.value = "gpt-5";
-        }
+        const previous = modelSelect.value || rememberedModelSelection || localStorage.getItem(storageKeys.model) || "";
+        allModelIds = (payload.data || [])
+          .map((entry) => (typeof entry?.id === "string" ? entry.id : ""))
+          .filter(Boolean);
+        preferredDefaultModel =
+          typeof payload.default_model === "string" ? payload.default_model.trim() : "";
+        populateModelOptions(previous || preferredDefaultModel);
 
         persistSettings();
-        setStatus(`模型已加载，共 ${modelSelect.options.length} 个`);
+        setStatus(`模型已加载，共 ${allModelIds.length} 个`);
       } catch (error) {
         setStatus(`加载模型失败：${error.message}`);
         appendMessage("system", `加载模型失败：${error.message}`, "error");
@@ -1221,6 +1652,7 @@ ${fragment}
       conversation.length = 0;
       promptInput.value = "";
       messagesEl.innerHTML = "";
+      renderSessionFiles([]);
       promptInput.focus();
     }
 
@@ -1240,12 +1672,17 @@ ${fragment}
         resetConversationState();
         for (const message of payload.messages || []) {
           if (typeof message?.role === "string") {
-            addConversationMessage(message.role, typeof message.content === "string" ? message.content : JSON.stringify(message.content));
+            addConversationMessage(
+              message.role,
+              typeof message.content === "string" ? message.content : JSON.stringify(message.content),
+              { modelLabel: typeof message.model === "string" ? message.model : "" }
+            );
           }
         }
 
         workspacePathEl.textContent = payload.workdir || `/workspace/${defaultUserId}/${currentChatId}`;
         publicBaseEl.textContent = payload.public_base_url || currentPublicBase();
+        renderSessionFiles(payload.files || []);
         setStatus(payload.messages?.length ? "已恢复会话" : "新会话就绪");
         loadRecentSessions();
       } catch (error) {
@@ -1276,7 +1713,8 @@ ${fragment}
         model: currentModel(),
         messages: conversation.map((message) => ({
           role: message.role,
-          content: message.content
+          content: message.content,
+          ...(message.model ? { model: message.model } : {})
         })),
         stream: streamToggle.checked,
         x_codex: {
@@ -1304,6 +1742,7 @@ ${fragment}
               : (payload.detail && payload.detail.message) || JSON.stringify(payload.detail || payload)
           );
         }
+        const resolvedModelLabel = response.headers.get("X-Codex-Resolved-Label") || currentModel();
 
         if (!streamToggle.checked) {
           const payload = await response.json();
@@ -1311,8 +1750,8 @@ ${fragment}
           if (activeController !== controller) {
             return;
           }
-          renderMessageContent(assistantNode, "assistant", content, { final: true });
-          conversation.push({ role: "assistant", content });
+          renderMessageContent(assistantNode, "assistant", content, { final: true, modelLabel: resolvedModelLabel });
+          conversation.push({ role: "assistant", content, model: resolvedModelLabel });
           setStatus("完成");
           loadRecentSessions();
           return;
@@ -1348,7 +1787,7 @@ ${fragment}
                 return;
               }
               finalText += delta;
-              renderMessageContent(assistantNode, "assistant", finalText, { final: false });
+              renderMessageContent(assistantNode, "assistant", finalText, { final: false, modelLabel: resolvedModelLabel });
               messagesEl.scrollTop = messagesEl.scrollHeight;
               setStatus("流式输出中...");
             }
@@ -1358,8 +1797,8 @@ ${fragment}
         if (activeController !== controller) {
           return;
         }
-        renderMessageContent(assistantNode, "assistant", finalText, { final: true });
-        conversation.push({ role: "assistant", content: finalText });
+        renderMessageContent(assistantNode, "assistant", finalText, { final: true, modelLabel: resolvedModelLabel });
+        conversation.push({ role: "assistant", content: finalText, model: resolvedModelLabel });
         setStatus("完成");
         loadRecentSessions();
       } catch (error) {
@@ -1383,7 +1822,7 @@ ${fragment}
       }
     }
 
-    function clearConversation() {
+    function clearConversation({ statusText = "已开始新对话" } = {}) {
       if (activeController) {
         activeController.abort();
         activeController = null;
@@ -1392,7 +1831,7 @@ ${fragment}
       updateChatUrl(currentChatId);
       applySessionUi();
       resetConversationState();
-      setStatus("已开始新对话");
+      setStatus(statusText);
       loadRecentSessions();
     }
 
@@ -1400,8 +1839,21 @@ ${fragment}
     reasoningInput.addEventListener("change", persistSettings);
     streamToggle.addEventListener("change", persistSettings);
     modelSelect.addEventListener("change", persistSettings);
+    modelSearchInput.addEventListener("input", () => {
+      const currentSelection = modelSelect.value;
+      populateModelOptions(currentSelection);
+      persistSettings();
+    });
     reloadModelsButton.addEventListener("click", loadModels);
     newChatButton.addEventListener("click", clearConversation);
+    themeToggleButton.addEventListener("click", () => {
+      applyTheme(currentTheme === "dark" ? "light" : "dark");
+      persistSettings();
+    });
+    uploadTrigger.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      uploadFiles(fileInput.files);
+    });
     sendButton.addEventListener("click", sendMessage);
     promptInput.addEventListener("keydown", (event) => {
       if (event.isComposing) {
@@ -1420,6 +1872,15 @@ ${fragment}
     loadRecentSessions();
 
     messagesEl.addEventListener("click", (event) => {
+      const anchor = event.target.closest("a[href]");
+      if (!anchor) {
+        return;
+      }
+      event.preventDefault();
+      openInPopup(anchor.href);
+    });
+
+    sessionFilesEl.addEventListener("click", (event) => {
       const anchor = event.target.closest("a[href]");
       if (!anchor) {
         return;

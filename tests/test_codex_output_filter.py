@@ -124,4 +124,45 @@ def test_run_codex_streams_partial_single_line_output(monkeypatch, tmp_path):
         return parts
 
     parts = asyncio.run(_collect())
-    assert parts == ["<p>Hello", " world", "</p>\n"]
+    assert parts == ["<p>Hello", " world", "</p>", "\n"]
+
+
+def test_build_codex_env_applies_runtime_overrides(monkeypatch, tmp_path):
+    config_dir = tmp_path / ".codex-home"
+    monkeypatch.setattr(codex.settings, "codex_config_dir", str(config_dir), raising=False)
+
+    env = codex._build_codex_env(
+        tmp_path,
+        env_overrides={
+            "OPENAI_BASE_URL": "https://openrouter.ai/api/v1",
+            "OPENAI_API_KEY": "or-test-key",
+        },
+    )
+
+    assert env["CODEX_HOME"] == str(config_dir)
+    assert env["OPENAI_BASE_URL"] == "https://openrouter.ai/api/v1"
+    assert env["OPENAI_API_KEY"] == "or-test-key"
+
+
+def test_build_cmd_and_env_leaves_model_provider_tables_unquoted(monkeypatch, tmp_path):
+    monkeypatch.setattr(codex.settings, "codex_path", "codex", raising=False)
+    monkeypatch.setattr(codex.settings, "sandbox_mode", "read-only", raising=False)
+    monkeypatch.setattr(codex.settings, "hide_reasoning", False, raising=False)
+    monkeypatch.setattr(codex.settings, "approval_policy", None, raising=False)
+    monkeypatch.setattr(codex.settings, "reasoning_effort", "medium", raising=False)
+    monkeypatch.setattr(codex, "_resolve_codex_executable", lambda: "codex")
+    monkeypatch.setattr(codex, "_resolve_workdir_state", lambda *_args, **_kwargs: (tmp_path, True))
+
+    cmd = codex._build_cmd_and_env(
+        "prompt",
+        overrides={
+            "model_provider": "openrouter",
+            "model_providers.openrouter": '{ name = "OpenRouter", base_url = "https://openrouter.ai/api/v1", env_key = "OPENROUTER_API_KEY", wire_api = "responses" }',
+        },
+        model="google/gemma-4-31b-it",
+        workdir=tmp_path,
+    )
+
+    assert '--config' in cmd
+    assert 'model_provider="openrouter"' in cmd
+    assert 'model_providers.openrouter={ name = "OpenRouter", base_url = "https://openrouter.ai/api/v1", env_key = "OPENROUTER_API_KEY", wire_api = "responses" }' in cmd

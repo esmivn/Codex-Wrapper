@@ -4,18 +4,20 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any, AsyncIterator, List
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from .codex import CodexError, run_codex, run_codex_last_message
 from .config import settings
 from .deps import rate_limiter, verify_api_key
 from .model_registry import (
-    choose_model,
     get_available_models,
+    get_preferred_model_label,
     initialize_model_registry,
+    resolve_model_request,
 )
 from .security import assert_local_only_or_raise
 from .prompt import (
@@ -26,10 +28,13 @@ from .prompt import (
 from .images import save_image_to_temp
 from .session_workspace import (
     DEFAULT_USER_ID,
+    delete_session_workspace,
     ensure_session_workspace,
+    list_session_files,
     list_recent_sessions,
     load_session_messages,
     resolve_session_file_path,
+    save_uploaded_file,
     save_session_messages,
 )
 from .schemas import (
@@ -37,6 +42,7 @@ from .schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessageResponse,
+    SessionFileUploadRequest,
     ResponsesRequest,
     ResponsesObject,
     ResponsesMessage,
@@ -82,8 +88,27 @@ def _workspace_public_base(request: Request, user_id: str, chat_id: str) -> str:
     return f"{str(request.base_url).rstrip('/')}/workspace/{user_id}/{chat_id}/"
 
 
-def _build_session_context_prefix(request: Request, user_id: str, chat_id: str, workdir: Path) -> str:
+def _public_file_url(request: Request, user_id: str, chat_id: str, relative_path: str) -> str:
+    encoded_path = "/".join(quote(part) for part in Path(relative_path).parts)
+    return f"{str(request.base_url).rstrip('/')}/workspace/{user_id}/{chat_id}/{encoded_path}"
+
+
+def _build_session_context_prefix(
+    request: Request,
+    user_id: str,
+    chat_id: str,
+    workdir: Path,
+    session_files: list[dict[str, Any]] | None = None,
+) -> str:
     public_base = _workspace_public_base(request, user_id, chat_id)
+    files_block = ""
+    visible_files = session_files or []
+    if visible_files:
+        file_lines = [
+            f"  - {item['relative_path']} (public URL: {_public_file_url(request, user_id, chat_id, item['relative_path'])})"
+            for item in visible_files[:20]
+        ]
+        files_block = "\n- files currently available in the working directory:\n" + "\n".join(file_lines)
     return (
         "Session workspace context:\n"
         f"- user_id: {user_id}\n"
@@ -92,7 +117,26 @@ def _build_session_context_prefix(request: Request, user_id: str, chat_id: str, 
         f"- files created in this directory are publicly accessible at: {public_base}<relative-path>\n"
         f"- if you create `test.html` in the working directory, share this link: {public_base}test.html\n"
         "- keep generated files inside the current working directory so the user can open them in a browser."
+        f"{files_block}"
     )
+
+
+def _debug_headers(
+    *,
+    requested_model: str | None,
+    resolved_model: str,
+    resolved_label: str,
+    provider_config: dict[str, str] | None,
+) -> dict[str, str]:
+    provider = provider_config.get("model_provider") if provider_config else "codex-default"
+    fallback_applied = str(bool(requested_model and requested_model != resolved_model)).lower()
+    return {
+        "X-Codex-Requested-Model": requested_model or "",
+        "X-Codex-Resolved-Model": resolved_model,
+        "X-Codex-Resolved-Label": resolved_label,
+        "X-Codex-Resolved-Provider": provider,
+        "X-Codex-Fallback-Applied": fallback_applied,
+    }
 
 
 def _normalize_message_payloads(messages: List[Any]) -> List[dict[str, Any]]:
@@ -130,6 +174,7 @@ async def get_chat_session(chat_id: str):
         "workdir": str(session.session_dir),
         "public_base_url": f"/workspace/{session.user_id}/{session.chat_id}/",
         "messages": load_session_messages(chat_id=session.chat_id, user_id=session.user_id),
+        "files": list_session_files(chat_id=session.chat_id, user_id=session.user_id),
     }
 
 
@@ -142,16 +187,65 @@ async def list_chat_sessions(limit: int = 10):
     }
 
 
+@app.post("/v1/chat/sessions/{chat_id}/files", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
+async def upload_chat_session_files(chat_id: str, payload: SessionFileUploadRequest, request: Request):
+    uploaded: list[dict[str, Any]] = []
+    try:
+        session = ensure_session_workspace(chat_id=chat_id, user_id=DEFAULT_USER_ID)
+        for item in payload.files:
+            saved = save_uploaded_file(
+                chat_id=session.chat_id,
+                user_id=session.user_id,
+                filename=item.name,
+                content_base64=item.content_base64,
+            )
+            saved["public_url"] = _public_file_url(
+                request, session.user_id, session.chat_id, saved["relative_path"]
+            )
+            uploaded.append(saved)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "user_id": session.user_id,
+        "chat_id": session.chat_id,
+        "workdir": str(session.session_dir),
+        "data": uploaded,
+        "files": list_session_files(chat_id=session.chat_id, user_id=session.user_id),
+    }
+
+
+@app.delete("/v1/chat/sessions/{chat_id}", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
+async def delete_chat_session(chat_id: str):
+    try:
+        session = delete_session_workspace(chat_id=chat_id, user_id=DEFAULT_USER_ID)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "deleted": True,
+        "user_id": session.user_id,
+        "chat_id": session.chat_id,
+        "workdir": str(session.session_dir),
+    }
+
+
 @app.get("/v1/models", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
 async def list_models():
     """Return available model list."""
-    return {"data": [{"id": model} for model in get_available_models(include_reasoning_aliases=True)]}
+    return {
+        "data": [{"id": model} for model in get_available_models(include_reasoning_aliases=True)],
+        "default_model": get_preferred_model_label(),
+    }
 
 
 @app.post("/v1/chat/completions", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
 async def chat_completions(req: ChatCompletionRequest, request: Request):
     try:
-        model_name, alias_effort = choose_model(req.model)
+        model_name, alias_effort, provider_env, provider_config, resolved_label = resolve_model_request(
+            req.model
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=404,
@@ -169,6 +263,8 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
     user_id = x_overrides.pop("user_id", DEFAULT_USER_ID)
     if alias_effort and "reasoning_effort" not in x_overrides:
         x_overrides["reasoning_effort"] = alias_effort
+    if provider_config:
+        x_overrides.update(provider_config)
     overrides = x_overrides or None
     session_dir: Path | None = None
     session_user_id = DEFAULT_USER_ID
@@ -182,15 +278,22 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
         session_dir = session.session_dir
         session_user_id = session.user_id
         session_chat_id = session.chat_id
+        session_files = list_session_files(chat_id=session.chat_id, user_id=session.user_id)
         injected_system_parts.append(
             _build_session_context_prefix(
-                request, session.user_id, session.chat_id, session.session_dir
+                request, session.user_id, session.chat_id, session.session_dir, session_files
             )
         )
 
     prompt, image_urls = build_prompt_and_images(
         message_payloads,
         injected_system_parts=injected_system_parts,
+    )
+    response_headers = _debug_headers(
+        requested_model=req.model,
+        resolved_model=model_name,
+        resolved_label=resolved_label,
+        provider_config=provider_config,
     )
 
     # Safety gate: only allow danger-full-access when explicitly enabled
@@ -221,7 +324,14 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
         if req.stream:
             async def event_gen() -> AsyncIterator[bytes]:
                 final_text = ""
-                async for text in run_codex(prompt, overrides, image_paths, model=model_name, workdir=session_dir):
+                async for text in run_codex(
+                    prompt,
+                    overrides,
+                    image_paths,
+                    model=model_name,
+                    workdir=session_dir,
+                    env_overrides=provider_env,
+                ):
                     if text:
                         final_text += text
                         chunk = {
@@ -234,23 +344,40 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
                     save_session_messages(
                         chat_id=session_chat_id,
                         user_id=session_user_id,
-                        messages=[*message_payloads, {"role": "assistant", "content": final_text}],
+                        messages=[
+                            *message_payloads,
+                            {"role": "assistant", "content": final_text, "model": resolved_label},
+                        ],
                     )
                 yield b"data: [DONE]\n\n"
 
-            return StreamingResponse(event_gen(), media_type="text/event-stream")
+            return StreamingResponse(
+                event_gen(),
+                media_type="text/event-stream",
+                headers=response_headers,
+            )
         else:
-            final = await run_codex_last_message(prompt, overrides, image_paths, model=model_name, workdir=session_dir)
+            final = await run_codex_last_message(
+                prompt,
+                overrides,
+                image_paths,
+                model=model_name,
+                workdir=session_dir,
+                env_overrides=provider_env,
+            )
             if session_chat_id:
                 save_session_messages(
                     chat_id=session_chat_id,
                     user_id=session_user_id,
-                    messages=[*message_payloads, {"role": "assistant", "content": final}],
+                    messages=[
+                        *message_payloads,
+                        {"role": "assistant", "content": final, "model": resolved_label},
+                    ],
                 )
             resp = ChatCompletionResponse(
                 choices=[ChatChoice(message=ChatMessageResponse(content=final))]
             )
-            return resp
+            return JSONResponse(content=resp.model_dump(), headers=response_headers)
     except CodexError as e:
         status = getattr(e, "status_code", None) or 500
         raise HTTPException(
@@ -272,7 +399,9 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
 @app.post("/v1/responses", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
 async def responses_endpoint(req: ResponsesRequest):
     try:
-        model, alias_effort = choose_model(req.model)
+        model, alias_effort, provider_env, provider_config, resolved_label = resolve_model_request(
+            req.model
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=404,
@@ -294,6 +423,8 @@ async def responses_endpoint(req: ResponsesRequest):
         overrides["reasoning_effort"] = alias_effort
     if req.reasoning and req.reasoning.effort:
         overrides["reasoning_effort"] = req.reasoning.effort
+    if provider_config:
+        overrides.update(provider_config)
 
     # Enforce local-only model provider when enabled
     if settings.local_only:
@@ -306,11 +437,17 @@ async def responses_endpoint(req: ResponsesRequest):
         messages,
         injected_system_parts=load_wrapper_system_prompt_parts(),
     )
+    response_model = req.model or resolved_label
+    response_headers = _debug_headers(
+        requested_model=req.model,
+        resolved_model=model,
+        resolved_label=response_model,
+        provider_config=provider_config,
+    )
 
     resp_id = f"resp_{uuid.uuid4().hex}"
     msg_id = f"msg_{uuid.uuid4().hex}"
     created = int(time.time())
-    response_model = req.model or model
     codex_overrides = overrides or None
 
     image_paths: List[str] = []
@@ -339,7 +476,13 @@ async def responses_endpoint(req: ResponsesRequest):
                     yield f"event: response.created\ndata: {json.dumps(created_evt)}\n\n".encode()
 
                     buf: list[str] = []
-                    async for text in run_codex(prompt, codex_overrides, image_paths, model=model):
+                    async for text in run_codex(
+                        prompt,
+                        codex_overrides,
+                        image_paths,
+                        model=model,
+                        env_overrides=provider_env,
+                    ):
                         if text:
                             buf.append(text)
                             delta_evt = {"id": resp_id, "delta": text}
@@ -373,9 +516,19 @@ async def responses_endpoint(req: ResponsesRequest):
                 "X-Accel-Buffering": "no",
                 "Connection": "keep-alive",
             }
-            return StreamingResponse(event_gen(), media_type="text/event-stream", headers=headers)
+            return StreamingResponse(
+                event_gen(),
+                media_type="text/event-stream",
+                headers={**headers, **response_headers},
+            )
         else:
-            final = await run_codex_last_message(prompt, codex_overrides, image_paths, model=model)
+            final = await run_codex_last_message(
+                prompt,
+                codex_overrides,
+                image_paths,
+                model=model,
+                env_overrides=provider_env,
+            )
             resp = ResponsesObject(
                 id=resp_id,
                 created=created,
@@ -388,7 +541,7 @@ async def responses_endpoint(req: ResponsesRequest):
                     )
                 ],
             )
-            return resp
+            return JSONResponse(content=resp.model_dump(), headers=response_headers)
     except CodexError as e:
         status = getattr(e, "status_code", None) or 500
         raise HTTPException(

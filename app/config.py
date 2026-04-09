@@ -25,6 +25,18 @@ class Settings(BaseSettings):
     )
     codex_path: str = Field(default="codex", alias="CODEX_PATH")
     codex_node_path: Optional[str] = Field(default=None, alias="CODEX_NODE_PATH")
+    openrouter_api_key: Optional[str] = Field(
+        default=None, alias="OPENROUTER_API_KEY"
+    )
+    openrouter_base_url: str = Field(
+        default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL"
+    )
+    openrouter_model: str = Field(
+        default="openai/gpt-5.1", alias="OPENROUTER_MODEL"
+    )
+    openrouter_reasoning_effort: str = Field(
+        default="high", alias="OPENROUTER_REASONING_EFFORT"
+    )
     approval_policy: Optional[str] = Field(default=None, alias="CODEX_APPROVAL_POLICY")
     sandbox_mode: str = Field(default="read-only", alias="CODEX_SANDBOX_MODE")
     workspace_network_access: bool = Field(
