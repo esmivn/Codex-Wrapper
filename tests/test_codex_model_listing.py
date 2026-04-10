@@ -4,6 +4,7 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from app import codex
 from app import model_registry
 from app.codex import CodexError
 
@@ -74,3 +75,22 @@ def test_initialize_model_registry_falls_back_when_discovery_fails(monkeypatch):
     assert models == ["codex-cli", "gpt-5.1", "gpt-5"]
     assert model_registry.get_default_model() == "gpt-5.1"
     assert model_registry.get_last_error() == "boom"
+
+
+def test_builtin_model_presets_use_curated_openai_fallback_when_submodule_missing(monkeypatch):
+    codex.load_builtin_model_presets.cache_clear()
+
+    def fake_read_text(self, encoding="utf-8"):
+        raise FileNotFoundError("missing preset file")
+
+    monkeypatch.setattr(codex.Path, "read_text", fake_read_text, raising=True)
+
+    presets = codex.load_builtin_model_presets()
+    models = [preset.model for preset in presets]
+
+    assert "gpt-5.4" in models
+    assert "gpt-5.4-mini" in models
+    assert "gpt-5.1-codex" in models
+    assert "gpt-5-codex" in models
+
+    codex.load_builtin_model_presets.cache_clear()

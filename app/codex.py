@@ -38,6 +38,28 @@ _FALLBACK_MODELS = (DEFAULT_CODEX_MODEL, "gpt-5.1")
 _SKIP_PRESET_PREFIXES = ("swiftfox",)
 _DEFAULT_REASONING_EFFORTS = ("low", "medium", "high")
 _ALLOWED_REASONING_EFFORTS = set((*_DEFAULT_REASONING_EFFORTS, "xhigh"))
+_CURATED_OPENAI_FALLBACK_MODELS = (
+    "gpt-5.4",
+    "gpt-5.4-pro",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "gpt-5.3-codex",
+    "gpt-5.2",
+    "gpt-5.2-pro",
+    "gpt-5.2-chat",
+    "gpt-5.2-codex",
+    "gpt-5.1",
+    "gpt-5.1-chat",
+    "gpt-5.1-codex",
+    "gpt-5.1-codex-mini",
+    "gpt-5.1-codex-max",
+    "gpt-5",
+    "gpt-5-pro",
+    "gpt-5-chat",
+    "gpt-5-codex",
+    "gpt-5-mini",
+    "gpt-5-nano",
+)
 
 _DEFAULT_PROFILE_DIR = (
     Path(__file__).resolve().parent.parent / "workspace" / "codex_profile"
@@ -849,10 +871,10 @@ def load_builtin_model_presets() -> List[ModelPresetEntry]:
         raw = preset_path.read_text(encoding="utf-8")
     except FileNotFoundError:
         logger.warning("Codex model preset file not found: %s", preset_path)
-        return []
+        return [ModelPresetEntry(model=model, effort=None) for model in _CURATED_OPENAI_FALLBACK_MODELS]
     except Exception as exc:  # pragma: no cover - unexpected IO failure
         logger.warning("Failed to read Codex model presets from %s: %s", preset_path, exc)
-        return []
+        return [ModelPresetEntry(model=model, effort=None) for model in _CURATED_OPENAI_FALLBACK_MODELS]
 
     model_pattern = re.compile(r'model:\s*"([^"]+)"')
     effort_pattern = re.compile(
@@ -905,6 +927,7 @@ def load_builtin_model_presets() -> List[ModelPresetEntry]:
 
     if not presets:
         logger.warning("Parsed zero Codex model presets from %s", preset_path)
+        return [ModelPresetEntry(model=model, effort=None) for model in _CURATED_OPENAI_FALLBACK_MODELS]
     return presets
 
 
