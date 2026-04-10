@@ -10,9 +10,18 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
+from .auth import (
+    authenticate,
+    admin_reset_password,
+    change_password,
+    create_token,
+    create_user,
+    ensure_default_admin,
+    list_users,
+)
 from .codex import CodexError, run_codex, run_codex_last_message
 from .config import settings
-from .deps import rate_limiter, verify_api_key
+from .deps import get_current_user, get_request_user_id, rate_limiter, require_admin, verify_api_key
 from .model_registry import (
     get_available_models,
     get_preferred_model_label,
@@ -38,10 +47,14 @@ from .session_workspace import (
     save_session_messages,
 )
 from .schemas import (
+    ChangePasswordRequest,
     ChatChoice,
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessageResponse,
+    LoginRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
     SessionFileUploadRequest,
     ResponsesRequest,
     ResponsesObject,
@@ -62,7 +75,57 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event() -> None:
+    ensure_default_admin()
     await initialize_model_registry()
+
+
+# ---------------------------------------------------------------------------
+# Auth endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/v1/auth/login")
+async def auth_login(req: LoginRequest):
+    user = authenticate(req.username, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return {"token": create_token(user["username"]), "user": user}
+
+
+@app.get("/v1/auth/me")
+async def auth_me(user: dict = Depends(get_current_user)):
+    return {"user": user}
+
+
+@app.post("/v1/auth/change-password")
+async def auth_change_password(req: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    try:
+        change_password(user["username"], req.old_password, req.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@app.post("/v1/auth/register")
+async def auth_register(req: RegisterRequest, _admin: dict = Depends(require_admin)):
+    try:
+        new_user = create_user(req.username, req.password, req.role)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"user": new_user}
+
+
+@app.post("/v1/auth/reset-password")
+async def auth_reset_password(req: ResetPasswordRequest, _admin: dict = Depends(require_admin)):
+    try:
+        admin_reset_password(req.username, req.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True}
+
+
+@app.get("/v1/auth/users")
+async def auth_list_users(_admin: dict = Depends(require_admin)):
+    return {"users": list_users()}
 
 
 @app.get("/", include_in_schema=False)
@@ -163,9 +226,9 @@ async def serve_workspace_file(user_id: str, chat_id: str, file_path: str) -> Fi
 
 
 @app.get("/v1/chat/sessions/{chat_id}", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
-async def get_chat_session(chat_id: str):
+async def get_chat_session(chat_id: str, user_id: str = Depends(get_request_user_id)):
     try:
-        session = ensure_session_workspace(chat_id=chat_id, user_id=DEFAULT_USER_ID)
+        session = ensure_session_workspace(chat_id=chat_id, user_id=user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
@@ -179,19 +242,19 @@ async def get_chat_session(chat_id: str):
 
 
 @app.get("/v1/chat/sessions", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
-async def list_chat_sessions(limit: int = 10):
+async def list_chat_sessions(limit: int = 10, user_id: str = Depends(get_request_user_id)):
     if limit < 1:
         raise HTTPException(status_code=400, detail="limit must be >= 1")
     return {
-        "data": list_recent_sessions(user_id=DEFAULT_USER_ID, limit=min(limit, 50))
+        "data": list_recent_sessions(user_id=user_id, limit=min(limit, 50))
     }
 
 
 @app.post("/v1/chat/sessions/{chat_id}/files", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
-async def upload_chat_session_files(chat_id: str, payload: SessionFileUploadRequest, request: Request):
+async def upload_chat_session_files(chat_id: str, payload: SessionFileUploadRequest, request: Request, user_id: str = Depends(get_request_user_id)):
     uploaded: list[dict[str, Any]] = []
     try:
-        session = ensure_session_workspace(chat_id=chat_id, user_id=DEFAULT_USER_ID)
+        session = ensure_session_workspace(chat_id=chat_id, user_id=user_id)
         for item in payload.files:
             saved = save_uploaded_file(
                 chat_id=session.chat_id,
@@ -216,9 +279,9 @@ async def upload_chat_session_files(chat_id: str, payload: SessionFileUploadRequ
 
 
 @app.delete("/v1/chat/sessions/{chat_id}", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
-async def delete_chat_session(chat_id: str):
+async def delete_chat_session(chat_id: str, user_id: str = Depends(get_request_user_id)):
     try:
-        session = delete_session_workspace(chat_id=chat_id, user_id=DEFAULT_USER_ID)
+        session = delete_session_workspace(chat_id=chat_id, user_id=user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError:

@@ -2,3 +2,4 @@ fastapi
 uvicorn[standard]
 pydantic
 pydantic-settings
+PyJWT>=2.8

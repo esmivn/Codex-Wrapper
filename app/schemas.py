@@ -101,3 +101,26 @@ class ResponsesObject(BaseModel):
     status: Literal["in_progress", "completed", "failed"] = "completed"
     output: List[ResponsesMessage]
     usage: ResponsesUsage = ResponsesUsage()
+
+
+# --- Auth API ---
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+class ResetPasswordRequest(BaseModel):
+    username: str
+    new_password: str
