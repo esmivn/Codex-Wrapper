@@ -1,39 +1,76 @@
-import json
+import asyncio
+from pathlib import Path
+import sys
 
-from app import codex
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from app import model_registry
+from app.codex import CodexError
 
 
-def test_parse_model_listing_includes_codex_variants_from_json():
-    payload = json.dumps(
-        {
-            "data": [
-                {"id": "gpt-5.1-codex-max", "deployment": "codex"},
-                {"id": "gpt-5.1-codex-mini", "deployments": ["codex"]},
-                {"id": "gpt-5.2", "deployment": "default"},
-                {"id": "o4-mini", "deployment": "default"},
-            ]
-        }
+def test_initialize_model_registry_loads_models_from_current_sources(monkeypatch):
+    monkeypatch.setattr(
+        model_registry,
+        "apply_codex_profile_overrides",
+        lambda: None,
     )
 
-    models = codex._parse_model_listing(payload)
+    async def fake_list_codex_models():
+        return ["gpt-5.1-codex", "o4-mini", "gpt-5"]
 
-    assert "gpt-5.1-codex-max" in models
-    assert "gpt-5.1-codex-mini" in models
-    assert "gpt-5.2" in models
-    assert "o4-mini" in models
-    assert "o4-mini-codex" not in models
+    monkeypatch.setattr(model_registry, "list_codex_models", fake_list_codex_models)
+    monkeypatch.setattr(model_registry, "_load_openrouter_models", lambda: [])
+    monkeypatch.setattr(
+        model_registry,
+        "builtin_reasoning_aliases",
+        lambda: {"gpt-5.1-codex": ("low", "high")},
+    )
+    monkeypatch.setattr(model_registry, "_AVAILABLE_MODELS", ["codex-cli"])
+    monkeypatch.setattr(model_registry, "_OPENROUTER_MODELS", [])
+    monkeypatch.setattr(model_registry, "_REASONING_ALIAS_MAP", {})
+    monkeypatch.setattr(model_registry, "_LAST_ERROR", None)
+
+    models = asyncio.run(model_registry.initialize_model_registry())
+
+    assert models == ["gpt-5.1-codex", "gpt-5.1", "o4-mini", "gpt-5"]
+    assert model_registry.get_available_models(include_reasoning_aliases=True) == [
+        "gpt-5.1-codex",
+        "gpt-5.1",
+        "o4-mini",
+        "gpt-5",
+        "gpt-5.1-codex low",
+        "gpt-5.1-codex high",
+        "gpt-5.1 low",
+        "gpt-5.1 medium",
+        "gpt-5.1 high",
+        "gpt-5.1 xhigh",
+        "gpt-5 low",
+        "gpt-5 medium",
+        "gpt-5 high",
+        "gpt-5 xhigh",
+    ]
+    assert model_registry.get_last_error() is None
 
 
-def test_parse_model_listing_infers_codex_from_plaintext():
-    raw = """
-    Available models:
-      gpt-5.1-codex-max codex
-      gpt-5.1-codex-mini codex
-      o4-mini default
-    """
+def test_initialize_model_registry_falls_back_when_discovery_fails(monkeypatch):
+    monkeypatch.setattr(
+        model_registry,
+        "apply_codex_profile_overrides",
+        lambda: None,
+    )
 
-    models = codex._parse_model_listing(raw)
+    async def fake_list_codex_models():
+        raise CodexError("boom")
 
-    assert "gpt-5.1-codex-max" in models
-    assert "gpt-5.1-codex-mini" in models
-    assert "o4-mini-codex" not in models
+    monkeypatch.setattr(model_registry, "list_codex_models", fake_list_codex_models)
+    monkeypatch.setattr(model_registry, "_load_openrouter_models", lambda: [])
+    monkeypatch.setattr(model_registry, "_AVAILABLE_MODELS", ["codex-cli"])
+    monkeypatch.setattr(model_registry, "_OPENROUTER_MODELS", [])
+    monkeypatch.setattr(model_registry, "_REASONING_ALIAS_MAP", {})
+    monkeypatch.setattr(model_registry, "_LAST_ERROR", None)
+
+    models = asyncio.run(model_registry.initialize_model_registry())
+
+    assert models == ["codex-cli", "gpt-5.1", "gpt-5"]
+    assert model_registry.get_default_model() == "gpt-5.1"
+    assert model_registry.get_last_error() == "boom"

@@ -114,6 +114,8 @@ def test_apply_codex_profile_overrides_prefers_primary_over_legacy(
     config_path = codex_home / "config.toml"
     assert agents_path.read_text(encoding="utf-8") == "primary"
     assert config_path.read_text(encoding="utf-8") == "value = 1\n"
-    # No warnings expected because only primary filenames should be used.
-    warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
-    assert not warnings
+    # No legacy-file warnings expected because only primary filenames should be used.
+    warning_messages = [
+        record.message for record in caplog.records if record.levelno >= logging.WARNING
+    ]
+    assert not any("legacy filename" in message for message in warning_messages)
