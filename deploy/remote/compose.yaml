@@ -1,0 +1,27 @@
+services:
+  codex-wrapper:
+    init: true
+    image: codex-wrapper:sandbox-amd64
+    container_name: codex-wrapper
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CODEX_HOME: /home/codex/.codex
+      CODEX_DEFAULT_USER_ID: ${CODEX_DEFAULT_USER_ID:-default}
+      CODEX_WORKDIR: /workspace/default
+      CODEX_ISOLATE_USER_WORKSPACE: ${CODEX_ISOLATE_USER_WORKSPACE:-1}
+      CODEX_PATH: codex
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    ports:
+      - "8020:8000"
+    volumes:
+      - ${CODEX_AUTH_DIR:-/home/kaleo/.codex}:/home/codex/.codex
+      - codex-workspace:/workspace
+
+volumes:
+  codex-workspace:
+    external: true
+    name: codex-workspace

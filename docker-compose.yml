@@ -1,5 +1,6 @@
 services:
   codex-wrapper:
+    init: true
     build:
       context: .
       dockerfile: Dockerfile
@@ -12,11 +13,15 @@ services:
       - .env
     environment:
       CODEX_HOME: /home/codex/.codex
-      CODEX_WORKDIR: /workspace
+      CODEX_WORKDIR: /workspace/default
       CODEX_PATH: codex
-      CODEX_APPROVAL_POLICY: never
-      CODEX_SANDBOX_MODE: danger-full-access
-      CODEX_ALLOW_DANGER_FULL_ACCESS: "1"
+      CODEX_APPROVAL_POLICY: ${CODEX_APPROVAL_POLICY:-never}
+      CODEX_SANDBOX_MODE: ${CODEX_SANDBOX_MODE:-workspace-write}
+      CODEX_ALLOW_DANGER_FULL_ACCESS: ${CODEX_ALLOW_DANGER_FULL_ACCESS:-0}
+    security_opt:
+      - seccomp=unconfined
+      # On AppArmor-enabled Linux hosts, Codex Linux sandbox may also require:
+      # - apparmor=unconfined
     ports:
       - "8020:8000"
     volumes:

@@ -11,7 +11,7 @@ from typing import Any, Optional
 from .config import settings
 
 
-DEFAULT_USER_ID = "default"
+DEFAULT_USER_ID = settings.codex_default_user_id
 _SEGMENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _UPLOAD_NAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -46,12 +46,22 @@ def get_workspace_root() -> Path:
     return Path(settings.codex_workdir).expanduser()
 
 
+def get_user_workspace_root(user_id: Optional[str] = None) -> Path:
+    resolved_user_id = _validate_segment(user_id or DEFAULT_USER_ID, field_name="user_id")
+    workspace_root = get_workspace_root()
+    if workspace_root.name == DEFAULT_USER_ID:
+        if resolved_user_id == DEFAULT_USER_ID:
+            return workspace_root
+        return workspace_root.parent / resolved_user_id
+    return workspace_root / resolved_user_id
+
+
 def get_session_workspace(chat_id: str, user_id: Optional[str] = None) -> SessionWorkspace:
     resolved_user_id = _validate_segment(user_id or DEFAULT_USER_ID, field_name="user_id")
     resolved_chat_id = _validate_segment(chat_id, field_name="chat_id")
 
     workspace_root = get_workspace_root()
-    user_dir = workspace_root / resolved_user_id
+    user_dir = get_user_workspace_root(resolved_user_id)
     session_dir = user_dir / resolved_chat_id
 
     return SessionWorkspace(
@@ -212,8 +222,7 @@ def list_recent_sessions(
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     resolved_user_id = _validate_segment(user_id or DEFAULT_USER_ID, field_name="user_id")
-    workspace_root = get_workspace_root()
-    user_dir = workspace_root / resolved_user_id
+    user_dir = get_user_workspace_root(resolved_user_id)
     if not user_dir.is_dir():
         return []
 

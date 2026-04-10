@@ -261,6 +261,11 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
     x_overrides = req.x_codex.dict(exclude_none=True) if req.x_codex else {}
     chat_id = x_overrides.pop("chat_id", None)
     user_id = x_overrides.pop("user_id", DEFAULT_USER_ID)
+    if settings.codex_isolate_user_workspace and user_id != DEFAULT_USER_ID and not chat_id:
+        raise HTTPException(
+            status_code=400,
+            detail="chat_id is required for non-default users when CODEX_ISOLATE_USER_WORKSPACE is enabled.",
+        )
     if alias_effort and "reasoning_effort" not in x_overrides:
         x_overrides["reasoning_effort"] = alias_effort
     if provider_config:
@@ -331,6 +336,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
                     model=model_name,
                     workdir=session_dir,
                     env_overrides=provider_env,
+                    user_id=session_user_id if session_dir else user_id,
                 ):
                     if text:
                         final_text += text
@@ -364,6 +370,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
                 model=model_name,
                 workdir=session_dir,
                 env_overrides=provider_env,
+                user_id=session_user_id if session_dir else user_id,
             )
             if session_chat_id:
                 save_session_messages(

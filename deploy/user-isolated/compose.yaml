@@ -1,0 +1,29 @@
+services:
+  codex-wrapper:
+    init: true
+    image: ${IMAGE_NAME:-codex-wrapper:sandbox-amd64}
+    container_name: codex-wrapper-${USER_ID}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CODEX_HOME: /home/codex/.codex
+      CODEX_DEFAULT_USER_ID: ${USER_ID}
+      CODEX_WORKDIR: /workspace/${USER_ID}
+      CODEX_ISOLATE_USER_WORKSPACE: 1
+      CODEX_PATH: codex
+      CODEX_APPROVAL_POLICY: ${CODEX_APPROVAL_POLICY:-never}
+      CODEX_SANDBOX_MODE: ${CODEX_SANDBOX_MODE:-workspace-write}
+      CODEX_ALLOW_DANGER_FULL_ACCESS: ${CODEX_ALLOW_DANGER_FULL_ACCESS:-0}
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m
+      - /run:rw,noexec,nosuid,nodev,size=32m
+    ports:
+      - "${HOST_PORT:-8020}:8000"
+    volumes:
+      - ${CODEX_AUTH_DIR}:/home/codex/.codex
+      - ${USER_WORKSPACE_HOST_DIR}:/workspace/${USER_ID}

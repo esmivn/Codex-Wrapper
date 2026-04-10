@@ -76,7 +76,7 @@ cp docs/examples/AGENTS.example.md AGENTS.md
 cp docs/examples/AGENTS.example.md $CODEX_WORKDIR/AGENTS.md
 ```
 
-With `CODEX_WORKDIR` set (default `/workspace`), Codex merges any `AGENTS.md` files under that directory hierarchy when the wrapper executes requests.
+With `CODEX_WORKDIR` set (default `/workspace/default`), Codex merges any `AGENTS.md` files under that directory hierarchy when the wrapper executes requests.
 
 4c) Optional: Wrapper bootstrap profile overrides
 
@@ -148,11 +148,36 @@ docker compose up
 ```
 
 Notes
-- The compose file sets `CODEX_APPROVAL_POLICY=never` and `CODEX_SANDBOX_MODE=danger-full-access` by default so Codex can run non-interactively inside the container. This is intentionally high-trust and should be used only in isolated environments.
+- The container image now uses `ubuntu:24.04`, installs `bubblewrap`, and runs as a non-root UID/GID so Codex Linux sandboxing can work inside Docker.
+- The compose file adds `security_opt: [seccomp=unconfined]` and defaults to `CODEX_APPROVAL_POLICY=never` with `CODEX_SANDBOX_MODE=workspace-write`, which matches the sandbox combination validated in `poc/sandbox/`.
+- The compose files also set `init: true` so PID 1 reaps finished `codex` / `bwrap` children instead of leaving zombie processes behind.
+- On Linux hosts with AppArmor enabled, you may also need `security_opt: [apparmor=unconfined]` at runtime. This was required on the remote Ubuntu host used for validation.
 - The compose file bind-mounts `${HOME}/.codex` into the container so it reuses the same Codex credentials you already configured in WSL. Make sure the directory exists (`mkdir -p ~/.codex`) before running `docker compose`.
 - `.env` is loaded via `env_file` to keep configuration in sync with non-container runs.
 - The container exposes the same `/v1/models` discovery as the bare-metal setup because the server still shells out to the bundled Codex CLI (`codex models list`).
 - You can launch ad-hoc Codex commands inside the container, for example `docker compose run --rm codex-wrapper codex models list`, to troubleshoot authentication before starting the API.
+
+### Repeatable Remote Deploy
+
+The repository includes a remote deployment bundle under `deploy/remote/`:
+
+- `deploy/remote/compose.yaml`
+- `deploy/remote/.env.example`
+- `scripts/deploy_remote_codex_wrapper.sh`
+
+The intended flow is:
+
+1. Copy `deploy/remote/.env.example` to `deploy/remote/.env` on the remote host and fill in secrets there.
+2. Build a `linux/amd64` image locally.
+3. Load that image on the remote host.
+4. Run `docker compose -f deploy/remote/compose.yaml up -d` on the remote host.
+
+The remote compose file already includes:
+
+- `seccomp=unconfined`
+- `apparmor=unconfined`
+- a persistent `/workspace` volume (the default Codex working directory inside it is `/workspace/default`)
+- a persistent `${CODEX_AUTH_DIR}` bind mount for Codex auth
 
 ### Models exposed by `/v1/models`
 
@@ -176,9 +201,11 @@ This server reads `.env` and uses the following variables. Example values and co
 - CODEX_APPROVAL_POLICY: Optional approval policy override passed to Codex CLI. Common values are `untrusted`, `on-request`, and `never`.
   - Leave unset to use the CLI default.
   - Set `never` in isolated containers/CI when you want Codex to run without approval prompts.
-- CODEX_WORKDIR: Working directory for Codex executions (`cwd`). Default `/workspace`.
+- CODEX_WORKDIR: Working directory for Codex executions (`cwd`). Default `/workspace/default`.
   - Ensure this directory is writable by the server user; otherwise Codex fails with `Failed to create CODEX_WORKDIR ... Read-only file system`.
   - Codex merges any `AGENTS.md` files under this directory tree when the wrapper runs requests; copy `docs/examples/AGENTS.example.md` here (or deeper) to provide project instructions.
+- CODEX_DEFAULT_USER_ID: Default session user ID. Default `default`.
+- CODEX_ISOLATE_USER_WORKSPACE: `0`/`1`. When `1`, the wrapper starts each Codex process under `bubblewrap` and only bind-mounts the active user's workspace subtree plus required read-only system paths. This is the shared-container option for preventing access to other users' `/workspace/<user_id>` trees.
 - CODEX_CONFIG_DIR: Optional directory treated as `CODEX_HOME` for this wrapper. When set, the server creates it if missing and runs Codex CLI with that directory as its config root; place wrapper-specific `config.toml`, `auth.json`, or MCP settings here.
 - CODEX_WRAPPER_PROFILE_DIR: Optional directory containing `codex_agents.md` / `codex_config.toml` that the wrapper copies into the Codex home before startup. Defaults to `workspace/codex_profile/`; the repository only ships samples (`codex_agents.sample.md`, `codex_config.sample.toml`). Legacy filenames (`agent.md`, `config.toml`) remain supported with a startup warning to ease migration.
 - CODEX_SYSTEM_PROMPT_FILE: Optional path to a Markdown/text file whose contents are appended to the wrapper’s built-in system prompt on every request. If unset, the wrapper looks for `system_prompt.md` under `CODEX_WRAPPER_PROFILE_DIR` (or `workspace/codex_profile/` by default).

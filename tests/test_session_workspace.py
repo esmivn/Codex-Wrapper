@@ -20,6 +20,30 @@ def test_ensure_session_workspace_uses_default_user(monkeypatch, tmp_path):
     assert session.session_dir.is_dir()
 
 
+def test_ensure_session_workspace_avoids_duplicate_default_segment(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        session_workspace.settings, "codex_workdir", str(tmp_path / "default"), raising=False
+    )
+
+    session = session_workspace.ensure_session_workspace("chat-rooted-default")
+
+    assert session.user_id == "default"
+    assert session.session_dir == tmp_path / "default" / "chat-rooted-default"
+    assert session.session_dir.is_dir()
+
+
+def test_non_default_user_stays_as_sibling_when_workdir_is_default_user_root(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        session_workspace.settings, "codex_workdir", str(tmp_path / "default"), raising=False
+    )
+
+    session = session_workspace.ensure_session_workspace("chat-bob", user_id="bob")
+
+    assert session.user_id == "bob"
+    assert session.session_dir == tmp_path / "bob" / "chat-bob"
+    assert session.session_dir.is_dir()
+
+
 def test_resolve_session_file_path_blocks_traversal(monkeypatch, tmp_path):
     monkeypatch.setattr(
         session_workspace.settings, "codex_workdir", str(tmp_path), raising=False

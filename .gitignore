@@ -11,5 +11,7 @@ workspace/codex_profile/codex_config.toml
 workspace/codex_profile/agent.md
 workspace/codex_profile/config.toml
 .credential.md
+deploy/remote/.env
+deploy/user-isolated/.env
 app/__pycache__
 app/.DS_Store

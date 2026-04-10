@@ -1,5 +1,6 @@
 import asyncio
 import codecs
+import filecmp
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
     import tomli as tomllib  # type: ignore
 
 from .config import settings
+from .session_workspace import get_user_workspace_root
 
 
 class CodexError(Exception):
@@ -50,6 +52,7 @@ _ASYNCIO_STREAM_LIMIT = 512 * 1024  # 512 KiB to tolerate large tool outputs
 _WORKDIR_LOCK = threading.Lock()
 _WORKDIR_PATH: Optional[Path] = None
 _WORKDIR_NEEDS_SKIP_GIT_CHECK = False
+_ISOLATED_CODEX_HOME_DIRNAME = ".codex-runner"
 
 
 class _CodexConcurrencyLimiter:
@@ -585,12 +588,150 @@ def _build_codex_env(
     return env
 
 
+def _candidate_source_codex_home_dirs() -> List[Path]:
+    candidates: List[Path] = []
+
+    def _append(path_value: Optional[str]) -> None:
+        if not path_value:
+            return
+        candidate = Path(path_value).expanduser()
+        if candidate not in candidates:
+            candidates.append(candidate)
+
+    _append(settings.codex_config_dir)
+    _append(os.environ.get("CODEX_HOME"))
+    _append(str(Path.home() / ".codex"))
+    return candidates
+
+
+def _copy_codex_home_seed_file(source_dir: Path, target_dir: Path, filename: str) -> None:
+    source = source_dir / filename
+    if not source.is_file():
+        return
+    target = target_dir / filename
+    if target.is_file():
+        try:
+            if filecmp.cmp(source, target, shallow=False):
+                return
+        except Exception:
+            pass
+    shutil.copy2(source, target)
+
+
+def _prepare_isolated_codex_home(user_id: str) -> Path:
+    user_root = get_user_workspace_root(user_id).expanduser()
+    target_dir = user_root / _ISOLATED_CODEX_HOME_DIRNAME
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    for source_dir in _candidate_source_codex_home_dirs():
+        if not source_dir.is_dir():
+            continue
+        try:
+            _copy_codex_home_seed_file(source_dir, target_dir, "auth.json")
+            _copy_codex_home_seed_file(source_dir, target_dir, "config.toml")
+        except Exception as exc:
+            logger.warning(
+                "Failed to seed isolated Codex home for user '%s' from '%s': %s",
+                user_id,
+                source_dir,
+                exc,
+            )
+        break
+    return target_dir
+
+
+def _existing_system_bind_mounts() -> List[tuple[str, str]]:
+    candidates = [
+        ("/usr", "/usr"),
+        ("/bin", "/bin"),
+        ("/sbin", "/sbin"),
+        ("/lib", "/lib"),
+        ("/lib64", "/lib64"),
+        ("/etc", "/etc"),
+        ("/opt", "/opt"),
+    ]
+    mounts: List[tuple[str, str]] = []
+    for src, dest in candidates:
+        if Path(src).exists():
+            mounts.append((src, dest))
+    return mounts
+
+
+def _build_isolated_bwrap_command(
+    inner_cmd: List[str],
+    *,
+    user_id: str,
+    workdir: Path,
+    isolated_codex_home: Path,
+) -> List[str]:
+    user_root = get_user_workspace_root(user_id).expanduser().resolve()
+    resolved_workdir = workdir.expanduser().resolve()
+    if resolved_workdir != user_root and user_root not in resolved_workdir.parents:
+        raise CodexError(
+            f"Refusing to start isolated Codex for user '{user_id}' outside '{user_root}'."
+        )
+
+    bwrap = shutil.which("bwrap") or shutil.which("bubblewrap")
+    if not bwrap:
+        raise CodexError("bubblewrap (bwrap) is required for per-user workspace isolation.")
+
+    cmd: List[str] = [
+        bwrap,
+        "--die-with-parent",
+        "--new-session",
+        "--unshare-all",
+        "--share-net",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--dir",
+        "/workspace",
+        "--dir",
+        "/home",
+        "--dir",
+        "/home/codex",
+    ]
+    for src, dest in _existing_system_bind_mounts():
+        cmd += ["--ro-bind", src, dest]
+    cmd += ["--bind", str(user_root), str(user_root)]
+    cmd += ["--bind", str(isolated_codex_home.resolve()), "/home/codex/.codex"]
+    cmd += ["--chdir", str(resolved_workdir)]
+    cmd += inner_cmd
+    return cmd
+
+
+def _prepare_codex_process_launch(
+    cmd: List[str],
+    *,
+    workdir: Path,
+    env: Dict[str, str],
+    user_id: Optional[str] = None,
+) -> tuple[List[str], Dict[str, str], Optional[str]]:
+    if not settings.codex_isolate_user_workspace or not user_id:
+        return cmd, env, str(workdir)
+
+    isolated_home = _prepare_isolated_codex_home(user_id)
+    isolated_env = dict(env)
+    isolated_env["HOME"] = "/home/codex"
+    isolated_env["CODEX_HOME"] = "/home/codex/.codex"
+    isolated_env.setdefault("TMPDIR", "/tmp")
+    wrapped_cmd = _build_isolated_bwrap_command(
+        cmd,
+        user_id=user_id,
+        workdir=workdir,
+        isolated_codex_home=isolated_home,
+    )
+    return wrapped_cmd, isolated_env, None
+
+
 def _build_cmd_and_env(
     prompt: str,
     overrides: Optional[Dict] = None,
     images: Optional[List[str]] = None,
     model: Optional[str] = None,
     workdir: Optional[Path] = None,
+    outer_workspace_isolated: bool = False,
 ) -> list[str]:
     """Build base `codex exec` command with configs and optional images."""
     cfg = {
@@ -624,6 +765,12 @@ def _build_cmd_and_env(
             else:
                 mapped[k] = v
         cfg.update(mapped)
+
+    # When the wrapper already constrains the process with an outer per-user
+    # bubblewrap namespace, let Codex run tool commands without trying to nest
+    # another Linux sandbox. The outer namespace is the real safety boundary.
+    if outer_workspace_isolated:
+        cfg["sandbox_mode"] = "danger-full-access"
 
     # Resolve codex executable
     exe = _resolve_codex_executable()
@@ -1005,21 +1152,36 @@ async def run_codex(
     model: Optional[str] = None,
     workdir: Optional[Path] = None,
     env_overrides: Optional[Dict[str, str]] = None,
+    user_id: Optional[str] = None,
 ) -> AsyncIterator[str]:
     """Run codex CLI as async generator yielding stdout lines suitable for SSE."""
     resolved_workdir, _ = _resolve_workdir_state(workdir)
-    cmd = _build_cmd_and_env(prompt, overrides, images, model, workdir=resolved_workdir)
+    outer_workspace_isolated = bool(settings.codex_isolate_user_workspace and user_id)
+    cmd = _build_cmd_and_env(
+        prompt,
+        overrides,
+        images,
+        model,
+        workdir=resolved_workdir,
+        outer_workspace_isolated=outer_workspace_isolated,
+    )
     codex_env = _build_codex_env(resolved_workdir, env_overrides=env_overrides)
+    launch_cmd, launch_env, launch_cwd = _prepare_codex_process_launch(
+        cmd,
+        workdir=resolved_workdir,
+        env=codex_env,
+        user_id=user_id,
+    )
     output_filter = _CodexOutputFilter()
 
     async with _parallel_limiter.slot():
         try:
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
+                *launch_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(resolved_workdir),
-                env=codex_env,
+                cwd=launch_cwd,
+                env=launch_env,
                 limit=_ASYNCIO_STREAM_LIMIT,
             )
         except FileNotFoundError as e:
@@ -1100,26 +1262,41 @@ async def run_codex_last_message(
     model: Optional[str] = None,
     workdir: Optional[Path] = None,
     env_overrides: Optional[Dict[str, str]] = None,
+    user_id: Optional[str] = None,
 ) -> str:
     """Run codex and return only the final assistant message using --json and --output-last-message.
 
     This avoids human oriented headers and logs from the CLI.
     """
     resolved_workdir, _ = _resolve_workdir_state(workdir)
-    cmd = _build_cmd_and_env(prompt, overrides, images, model, workdir=resolved_workdir)
+    outer_workspace_isolated = bool(settings.codex_isolate_user_workspace and user_id)
+    cmd = _build_cmd_and_env(
+        prompt,
+        overrides,
+        images,
+        model,
+        workdir=resolved_workdir,
+        outer_workspace_isolated=outer_workspace_isolated,
+    )
     # Create temp file in workdir to ensure permissions
     codex_env = _build_codex_env(resolved_workdir, env_overrides=env_overrides)
     with tempfile.NamedTemporaryFile(prefix="codex-last-", suffix=".txt", dir=resolved_workdir, delete=False) as tf:
         out_path = tf.name
     cmd = cmd + ["--json", "--output-last-message", out_path]
+    launch_cmd, launch_env, launch_cwd = _prepare_codex_process_launch(
+        cmd,
+        workdir=resolved_workdir,
+        env=codex_env,
+        user_id=user_id,
+    )
     try:
         async with _parallel_limiter.slot():
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
+                *launch_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(resolved_workdir),
-                env=codex_env,
+                cwd=launch_cwd,
+                env=launch_env,
                 limit=_ASYNCIO_STREAM_LIMIT,
             )
             stdout_data, stderr_data = await asyncio.wait_for(

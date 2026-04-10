@@ -12,7 +12,11 @@ class Settings(BaseSettings):
     # Docker ビルドで使用するホスト UID/GID。アプリ本体では未使用だが、.env の互換性維持のため受理する。
     host_uid: Optional[int] = Field(default=None, alias="HOST_UID")
     host_gid: Optional[int] = Field(default=None, alias="HOST_GID")
-    codex_workdir: str = Field(default="/workspace", alias="CODEX_WORKDIR")
+    codex_default_user_id: str = Field(default="default", alias="CODEX_DEFAULT_USER_ID")
+    codex_workdir: str = Field(default="/workspace/default", alias="CODEX_WORKDIR")
+    codex_isolate_user_workspace: bool = Field(
+        default=False, alias="CODEX_ISOLATE_USER_WORKSPACE"
+    )
     codex_config_dir: Optional[str] = Field(default=None, alias="CODEX_CONFIG_DIR")
     codex_profile_dir: Optional[str] = Field(
         default=None, alias="CODEX_WRAPPER_PROFILE_DIR"

@@ -18,7 +18,12 @@ This project loads configuration via environment variables. It supports a `.env`
   - Leave this unset to keep the Codex CLI default.
   - For isolated containers/CI where no user approval prompts should appear, set `CODEX_APPROVAL_POLICY=never`.
 - `CODEX_WORKDIR`: Working directory for Codex runs (server enforces `cwd` to this path).
+  - Default: `/workspace/default`.
   - Codex はこのディレクトリ階層で `AGENTS.md` を探索します。ラッパー API 特有の指示を適用したい場合は、ここ（または配下のサブディレクトリ）に `AGENTS.md` を配置してください。
+- `CODEX_DEFAULT_USER_ID`: Default `user_id` used by the browser chat and session APIs. Default `default`.
+- `CODEX_ISOLATE_USER_WORKSPACE`: `0`/`1`. When `1`, the wrapper launches Codex under `bubblewrap` and only bind-mounts the active user's workspace subtree plus required system directories.
+  - This blocks access to other users' `/workspace/<user_id>` trees from the isolated Codex process, as long as requests provide a `chat_id` scoped to that user.
+  - For non-default users, require `chat_id` so the wrapper can place the process inside the correct user workspace.
 - `CODEX_CONFIG_DIR`: Optional directory to use as the Codex CLI home for this wrapper. When set, the server exports `CODEX_HOME` for subprocesses and guarantees the folder exists. Place your API-specific `config.toml` here.
   - Leave this unset/empty when running in Docker so the container reuses the bind-mounted `${HOME}/.codex` directory.
   - API 専用の `config.toml` や MCP 設定を分離したい場合に利用します（CLI を直接使う環境と分けられます）。
@@ -29,10 +34,13 @@ This project loads configuration via environment variables. It supports a `.env`
   - This file is wrapper-only; unlike `codex_agents.md` / `codex_config.toml`, it is not copied into `CODEX_HOME`.
 - `CODEX_SYSTEM_PROMPT`: Optional inline system prompt text appended after the built-in wrapper rules and any file-based system prompt.
 - `CODEX_SANDBOX_MODE`: `read-only` | `workspace-write` | `danger-full-access`.
+  - For Dockerized Linux sandbox runs, the container must also allow the sandbox to initialize. The repository’s `docker-compose.yml` now sets `security_opt: [seccomp=unconfined]` for this reason.
+  - On AppArmor-enabled Linux hosts, add `security_opt: [apparmor=unconfined]` as well if `bubblewrap` fails with mount propagation errors such as `Failed to make / slave: Permission denied`.
 - `CODEX_REASONING_EFFORT`: `minimal` | `low` | `medium` | `high`.
 - `CODEX_HIDE_REASONING`: `0`/`1`. When `1`, the wrapper asks Codex CLI to suppress "thinking" output (`hide_agent_reasoning=true`). Default `0` keeps the CLI’s standard behaviour.
 - `CODEX_LOCAL_ONLY`: `0`/`1`. When `1`, the server rejects non‑local provider base URLs.
 - `CODEX_ALLOW_DANGER_FULL_ACCESS`: `0`/`1`. When `1`, the API may request `x_codex.sandbox=danger-full-access`.
+- `OPENROUTER_API_KEY`: Optional OpenRouter API key when you want OpenRouter-backed models to remain available after container restarts.
 - `CODEX_TIMEOUT`: Server‑side timeout for Codex runs (seconds; default 120).
 - `CODEX_MAX_PARALLEL_REQUESTS`: Maximum number of Codex subprocesses that may run at once (default 2). Raise this to improve throughput or set `1` to keep the historical serial behaviour. Values `<1` are treated as `1`.
 - `CODEX_ENV_FILE`: Name of the env file to load (set as an OS env var).
