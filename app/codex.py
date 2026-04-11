@@ -683,6 +683,87 @@ def get_system_skill_root() -> Optional[Path]:
     return None
 
 
+def _skill_front_matter_lines(skill_name: str, description: str) -> List[str]:
+    return [
+        "---",
+        f"name: {skill_name}",
+        f"description: {description}",
+        "---",
+        "",
+    ]
+
+
+def _split_skill_front_matter(text: str) -> tuple[Optional[dict[str, str]], str]:
+    normalized = text.replace("\r\n", "\n")
+    if not normalized.startswith("---\n"):
+        return None, normalized
+
+    end_marker = normalized.find("\n---\n", 4)
+    if end_marker == -1:
+        return None, normalized
+
+    header_block = normalized[4:end_marker]
+    body = normalized[end_marker + 5 :]
+    metadata: dict[str, str] = {}
+    for raw_line in header_block.splitlines():
+        line = raw_line.strip()
+        if not line or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        metadata[key.strip().lower()] = value.strip()
+    return metadata, body
+
+
+def _ensure_skill_front_matter(skill_dir: Path) -> bool:
+    skill_file = skill_dir / "SKILL.md"
+    if not skill_file.is_file():
+        return False
+
+    raw = skill_file.read_text(encoding="utf-8", errors="ignore")
+    metadata, body = _split_skill_front_matter(raw)
+    skill_name = skill_dir.name.strip() or "user-skill"
+    default_description = f"User-defined reusable skill `{skill_name}`."
+
+    if metadata is not None:
+        changed = False
+        name = metadata.get("name", "").strip()
+        description = metadata.get("description", "").strip()
+        if not name:
+            metadata["name"] = skill_name
+            changed = True
+        if not description:
+            metadata["description"] = default_description
+            changed = True
+        if not changed:
+            return False
+
+        rebuilt = "\n".join(
+            _skill_front_matter_lines(metadata["name"], metadata["description"])
+        ) + body.lstrip("\n")
+        skill_file.write_text(rebuilt, encoding="utf-8")
+        return True
+
+    rebuilt = "\n".join(_skill_front_matter_lines(skill_name, default_description)) + raw.lstrip("\n")
+    skill_file.write_text(rebuilt, encoding="utf-8")
+    return True
+
+
+def repair_user_skill_metadata(user_id: str) -> List[Path]:
+    root = get_user_skill_root(user_id)
+    repaired: List[Path] = []
+    if not root.is_dir():
+        return repaired
+
+    for skill_file in sorted(root.glob("*/SKILL.md")):
+        skill_dir = skill_file.parent
+        try:
+            if _ensure_skill_front_matter(skill_dir):
+                repaired.append(skill_file)
+        except Exception as exc:
+            logger.warning("Failed to normalize skill metadata for '%s': %s", skill_file, exc)
+    return repaired
+
+
 def _existing_system_bind_mounts() -> List[tuple[str, str]]:
     candidates = [
         ("/usr", "/usr"),
@@ -1206,6 +1287,8 @@ async def run_codex(
     user_id: Optional[str] = None,
 ) -> AsyncIterator[str]:
     """Run codex CLI as async generator yielding stdout lines suitable for SSE."""
+    if user_id:
+        repair_user_skill_metadata(user_id)
     resolved_workdir, _ = _resolve_workdir_state(workdir)
     outer_workspace_isolated = bool(settings.codex_isolate_user_workspace and user_id)
     cmd = _build_cmd_and_env(
@@ -1303,6 +1386,8 @@ async def run_codex(
             if proc.returncode is None:
                 proc.kill()
                 await proc.wait()
+            if user_id:
+                repair_user_skill_metadata(user_id)
 
 
 
@@ -1319,6 +1404,8 @@ async def run_codex_last_message(
 
     This avoids human oriented headers and logs from the CLI.
     """
+    if user_id:
+        repair_user_skill_metadata(user_id)
     resolved_workdir, _ = _resolve_workdir_state(workdir)
     outer_workspace_isolated = bool(settings.codex_isolate_user_workspace and user_id)
     cmd = _build_cmd_and_env(
@@ -1378,3 +1465,5 @@ async def run_codex_last_message(
             os.remove(out_path)
         except Exception:
             pass
+        if user_id:
+            repair_user_skill_metadata(user_id)

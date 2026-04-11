@@ -142,6 +142,48 @@ def test_get_user_skill_root_uses_per_user_directory(monkeypatch, tmp_path):
     assert skill_root.is_dir()
 
 
+def test_repair_user_skill_metadata_adds_missing_front_matter(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        codex.settings, "codex_user_skills_root", str(tmp_path / "user-skills"), raising=False
+    )
+    skill_dir = tmp_path / "user-skills" / "default" / "created-by-codex"
+    skill_dir.mkdir(parents=True)
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text(
+        "## created-by-codex Skill\n\nRespond with exactly <p>CREATED_BY_CODEX_OK</p>.\n",
+        encoding="utf-8",
+    )
+
+    repaired = codex.repair_user_skill_metadata("default")
+
+    assert repaired == [skill_file]
+    updated = skill_file.read_text(encoding="utf-8")
+    assert updated.startswith("---\nname: created-by-codex\ndescription: User-defined reusable skill `created-by-codex`.\n---\n")
+    assert "Respond with exactly <p>CREATED_BY_CODEX_OK</p>." in updated
+
+
+def test_repair_user_skill_metadata_preserves_valid_front_matter(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        codex.settings, "codex_user_skills_root", str(tmp_path / "user-skills"), raising=False
+    )
+    skill_dir = tmp_path / "user-skills" / "default" / "default-skill-test"
+    skill_dir.mkdir(parents=True)
+    skill_file = skill_dir / "SKILL.md"
+    original = (
+        "---\n"
+        "name: default-skill-test\n"
+        "description: Default user private skill verification.\n"
+        "---\n"
+        "When invoked, respond with exactly <p>DEFAULT_USER_SKILL_OK</p>.\n"
+    )
+    skill_file.write_text(original, encoding="utf-8")
+
+    repaired = codex.repair_user_skill_metadata("default")
+
+    assert repaired == []
+    assert skill_file.read_text(encoding="utf-8") == original
+
+
 def test_build_cmd_and_env_uses_inner_danger_mode_when_outer_isolated(monkeypatch, tmp_path):
     monkeypatch.setattr(codex.settings, "codex_path", "codex", raising=False)
     monkeypatch.setattr(codex.settings, "sandbox_mode", "workspace-write", raising=False)

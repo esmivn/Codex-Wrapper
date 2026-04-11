@@ -286,7 +286,142 @@
 - 文件实际进入当前会话目录
 - Codex 能使用上传文件
 
-## 八、OpenRouter 与模型路由
+## 八、Skills 回归
+
+### 1. 共享只读 skill 对所有用户可见
+
+验证点：
+- 共享 skill 放在宿主机共享目录后，`default`、`alice` 等不同用户都能调用
+- `Codex` 实际能识别该 skill，而不是 wrapper 伪造结果
+
+建议测试：
+1. 在宿主机共享 skills 目录创建：
+   - `<system-skills-host>/<skill-name>/SKILL.md`
+2. 通过不同 `user_id` 分别调用：
+   - `$shared-skill-test`
+3. 再在会话里执行：
+   - `/skills`
+
+期望结果：
+- 不同用户都能成功调用共享 skill
+- `/skills` 中能看到该 skill
+
+### 2. 用户私有 skill 仅当前用户可见
+
+验证点：
+- `default` 只能看到自己的 user skill
+- `alice` 只能看到自己的 user skill
+- 其他用户不能调用、不能在 `/skills` 里看到
+
+建议测试：
+1. 在宿主机用户目录创建：
+   - `<user-skills-host>/default/default-skill-test/SKILL.md`
+   - `<user-skills-host>/alice/alice-skill-test/SKILL.md`
+2. `default` 调用：
+   - `$default-skill-test`
+   - `$alice-skill-test`
+3. `alice` 调用：
+   - `$alice-skill-test`
+   - `$default-skill-test`
+
+期望结果：
+- 各自只能成功调用自己的私有 skill
+- 调用其他用户 skill 时应失败并明确表示该 skill 不可用
+
+### 3. 用户私有 skill 跨 chat_id 可复用
+
+验证点：
+- 同一个 `user_id` 在不同 `chat_id` 下都能看到同一份用户私有 skill
+
+建议测试：
+1. `default` 在 `chat-a` 调用 `$default-skill-test`
+2. `default` 在 `chat-b` 再次调用 `$default-skill-test`
+
+期望结果：
+- 两个不同会话都成功
+- 不需要每个会话单独复制一份 skill
+
+### 4. 用户应能创建或更新自己的 skill
+
+验证点：
+- Codex 在当前用户权限下可写 user skill 目录
+- 新建或更新结果真实落到宿主机
+
+建议测试：
+1. 让 Codex 创建：
+   - `<user-skill-root>/<skill-name>/SKILL.md`
+2. 宿主机直接检查该文件是否存在
+3. 再调用该 skill
+
+期望结果：
+- 文件落在宿主机用户 skill 目录
+- 该用户后续能调用该 skill
+
+### 5. 共享 skill 必须只读
+
+验证点：
+- Codex 不能修改共享 skill 文件
+- 宿主机原文件不变
+
+建议测试：
+1. 让 Codex 尝试覆盖：
+   - `/etc/codex/skills/<skill-name>/SKILL.md`
+2. 直接检查宿主机共享 skill 文件内容
+
+期望结果：
+- 修改失败
+- 宿主机原始文件未变化
+
+### 6. 非法 skill 格式应被修正或拒绝
+
+验证点：
+- 缺 front matter 的 `SKILL.md` 不应悄悄变成“持久化了但不可加载”的坏状态
+- 当前实现应自动补齐 front matter 并回写宿主机
+
+建议测试：
+1. 手工放一个缺 front matter 的：
+   - `<user-skills-host>/<user_id>/<skill-name>/SKILL.md`
+2. 触发一次该用户的 Codex 请求
+3. 检查宿主机文件是否已补齐：
+   - `name`
+   - `description`
+   - `---` front matter
+4. 再调用该 skill
+
+期望结果：
+- 文件被自动修正或被明确拒绝
+- 不会出现“文件存在但 Codex 永远看不到”的半坏状态
+
+### 7. skills 持久化到宿主机并在容器重建后仍生效
+
+验证点：
+- shared/user skills 都不应随着容器删除或 `force-recreate` 丢失
+- 重建后不仅文件还在，而且 Codex 仍能加载它们
+
+建议测试：
+1. 记录重建前可用的 skill：
+   - shared skill
+   - user skill
+   - 用户新建的 skill
+2. 执行远端：
+   - `docker compose up -d --force-recreate`
+3. 检查宿主机 skill 文件仍存在
+4. 再调用这些 skill
+
+期望结果：
+- 宿主机文件仍在
+- 重建后技能仍可调用
+
+### 8. `/skills` 与显式 `$skill-name` 行为一致
+
+验证点：
+- `/skills` 列出的 skill 与实际可调用 skill 一致
+- 不应出现“列出来但不能用”或“能用但列不出来”的明显偏差
+
+期望结果：
+- `/skills` 可作为当前会话技能可见性的审计依据
+
+## 九、OpenRouter 与模型路由
 
 ### 1. OpenRouter 模型可见
 
@@ -311,7 +446,7 @@
 - 默认模型回退到预期值
 - 不会报 provider 配置错误
 
-## 九、部署与镜像回归
+## 十、部署与镜像回归
 
 ### 1. 新镜像启动后行为不回退
 
@@ -333,20 +468,24 @@
 验证点：
 - 远端 `.env`、compose、认证目录与 volume 配置在容器重建后仍生效
 
-## 十、推荐最小回归集
+## 十一、推荐最小回归集
 
-如果每次改动后时间有限，至少做这 8 项：
+如果每次改动后时间有限，至少做这 12 项：
 
 1. `pytest` 跑权限与 workspace 相关单测
 2. `/v1/models` 返回正常
 3. `default` 用户创建文件成功
 4. `default` 看不到 `/workspace/alice/test.txt`
 5. `alice` 看不到 `/workspace/default/...`
-6. OpenRouter 模型调用成功
-7. 请求结束后无活动 `codex` / `bwrap` 残留
-8. 无新增 zombie 进程
+6. 共享 skill 可调用
+7. 当前用户私有 skill 可调用
+8. 其他用户私有 skill 不可调用
+9. 宿主机 skill 文件存在且格式正确
+10. OpenRouter 模型调用成功
+11. 请求结束后无活动 `codex` / `bwrap` 残留
+12. 无新增 zombie 进程
 
-## 十一、推荐记录格式
+## 十二、推荐记录格式
 
 每次做远端验证，建议记录：
 
@@ -361,5 +500,7 @@
 - 失败用例
 - 进程检查结果
 - 是否留下 zombie
+- skills 挂载宿主路径
+- skills 重建前后是否仍可调用
 
 这样后续才能判断问题是代码回退、镜像回退，还是部署配置没带上。

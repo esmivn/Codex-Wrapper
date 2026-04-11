@@ -16,6 +16,13 @@ _DEFAULT_WRAPPER_SYSTEM_PROMPT = """Wrapper execution rules:
 - Prefer sharing the public URL instead of an inaccessible local filesystem path when the user needs to open a file.
 - Keep generated files organized inside the session workspace and avoid writing outside it unless required.
 - Reusable user-created skills must follow the standard `SKILL.md` layout.
+- Every user-created `SKILL.md` must start with front matter in this exact shape:
+---
+name: my-skill-name
+description: One sentence describing when to use this skill.
+---
+- Then put the skill instructions below the front matter.
+- Do not omit the front matter, and do not invent alternative formats such as plain headings without the `---` metadata block.
 - Shared system skills are read-only and must not be modified.
 - If a plain text answer would normally be enough, wrap it in simple HTML such as <p>...</p>.
 - When you mention a generated file, prefer a clickable <a href="...">...</a> link.

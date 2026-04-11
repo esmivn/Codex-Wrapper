@@ -186,6 +186,11 @@ def _build_session_context_prefix(
         f"- if you create `test.html` in the working directory, share this link: {public_base}test.html\n"
         "- keep generated files inside the current working directory so the user can open them in a browser.\n"
         "- create or update user-specific reusable skills under the user-writable skills directory using the standard `SKILL.md` layout.\n"
+        "- every user-created skill must be stored as `<skill-name>/SKILL.md` and start with front matter like:\n"
+        "  ---\n"
+        "  name: example-skill\n"
+        "  description: One sentence describing when to use this skill.\n"
+        "  ---\n"
         "- never modify files inside the shared read-only skills directory."
         f"{files_block}"
     )
