@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     codex_isolate_user_workspace: bool = Field(
         default=False, alias="CODEX_ISOLATE_USER_WORKSPACE"
     )
+    codex_system_skills_dir: Optional[str] = Field(
+        default="/codex-host/system-skills", alias="CODEX_SYSTEM_SKILLS_DIR"
+    )
+    codex_user_skills_root: Optional[str] = Field(
+        default="/codex-host/user-skills", alias="CODEX_USER_SKILLS_ROOT"
+    )
     codex_config_dir: Optional[str] = Field(default=None, alias="CODEX_CONFIG_DIR")
     codex_profile_dir: Optional[str] = Field(
         default=None, alias="CODEX_WRAPPER_PROFILE_DIR"

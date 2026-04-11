@@ -14,6 +14,8 @@ services:
     environment:
       CODEX_HOME: /home/codex/.codex
       CODEX_WORKDIR: /workspace/default
+      CODEX_SYSTEM_SKILLS_DIR: /codex-host/system-skills
+      CODEX_USER_SKILLS_ROOT: /codex-host/user-skills
       CODEX_PATH: codex
       CODEX_APPROVAL_POLICY: ${CODEX_APPROVAL_POLICY:-never}
       CODEX_SANDBOX_MODE: ${CODEX_SANDBOX_MODE:-workspace-write}
@@ -27,6 +29,8 @@ services:
     volumes:
       - ${HOME}/.codex:/home/codex/.codex
       - codex-workspace:/workspace
+      - ${CODEX_SYSTEM_SKILLS_HOST_DIR:-./workspace/system-skills-host}:/codex-host/system-skills:ro
+      - ${CODEX_USER_SKILLS_HOST_DIR:-./workspace/user-skills-host}:/codex-host/user-skills
 
 volumes:
   codex-workspace:

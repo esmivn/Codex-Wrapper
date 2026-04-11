@@ -20,6 +20,7 @@ from .auth import (
     list_users,
 )
 from .codex import CodexError, run_codex, run_codex_last_message
+from .codex import get_system_skill_root, get_user_skill_root
 from .config import settings
 from .deps import get_current_user, get_request_user_id, rate_limiter, require_admin, verify_api_key
 from .model_registry import (
@@ -164,6 +165,8 @@ def _build_session_context_prefix(
     session_files: list[dict[str, Any]] | None = None,
 ) -> str:
     public_base = _workspace_public_base(request, user_id, chat_id)
+    user_skill_root = get_user_skill_root(user_id)
+    system_skill_root = get_system_skill_root()
     files_block = ""
     visible_files = session_files or []
     if visible_files:
@@ -177,9 +180,13 @@ def _build_session_context_prefix(
         f"- user_id: {user_id}\n"
         f"- chat_id: {chat_id}\n"
         f"- current working directory: {workdir}\n"
+        f"- user-writable skills directory: {user_skill_root}\n"
+        f"- shared read-only skills directory: {system_skill_root or '/etc/codex/skills'}\n"
         f"- files created in this directory are publicly accessible at: {public_base}<relative-path>\n"
         f"- if you create `test.html` in the working directory, share this link: {public_base}test.html\n"
-        "- keep generated files inside the current working directory so the user can open them in a browser."
+        "- keep generated files inside the current working directory so the user can open them in a browser.\n"
+        "- create or update user-specific reusable skills under the user-writable skills directory using the standard `SKILL.md` layout.\n"
+        "- never modify files inside the shared read-only skills directory."
         f"{files_block}"
     )
 

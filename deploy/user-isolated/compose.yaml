@@ -11,6 +11,8 @@ services:
       CODEX_DEFAULT_USER_ID: ${USER_ID}
       CODEX_WORKDIR: /workspace/${USER_ID}
       CODEX_ISOLATE_USER_WORKSPACE: 1
+      CODEX_SYSTEM_SKILLS_DIR: /codex-host/system-skills
+      CODEX_USER_SKILLS_ROOT: /codex-host/user-skills
       CODEX_PATH: codex
       CODEX_APPROVAL_POLICY: ${CODEX_APPROVAL_POLICY:-never}
       CODEX_SANDBOX_MODE: ${CODEX_SANDBOX_MODE:-workspace-write}
@@ -27,3 +29,5 @@ services:
     volumes:
       - ${CODEX_AUTH_DIR}:/home/codex/.codex
       - ${USER_WORKSPACE_HOST_DIR}:/workspace/${USER_ID}
+      - ${CODEX_SYSTEM_SKILLS_HOST_DIR:-/srv/codex-system-skills}:/codex-host/system-skills:ro
+      - ${CODEX_USER_SKILLS_HOST_DIR:-/srv/codex-user-skills}:/codex-host/user-skills

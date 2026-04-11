@@ -42,8 +42,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app
 
 # Prepare writable locations for the non-root runtime user.
-RUN mkdir -p /workspace/default /home/codex/.codex \
-    && chown -R "${CODEX_UID}:${CODEX_GID}" /workspace /home/codex
+RUN mkdir -p /workspace/default /home/codex/.codex /etc/codex/skills /codex-host/system-skills /codex-host/user-skills \
+    && chown -R "${CODEX_UID}:${CODEX_GID}" /workspace /home/codex /codex-host/user-skills
 
 WORKDIR /workspace/default
 

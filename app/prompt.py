@@ -15,6 +15,8 @@ _DEFAULT_WRAPPER_SYSTEM_PROMPT = """Wrapper execution rules:
 - If you create a browser-viewable artifact such as HTML, return its final HTTP link inside the HTML fragment when one is available.
 - Prefer sharing the public URL instead of an inaccessible local filesystem path when the user needs to open a file.
 - Keep generated files organized inside the session workspace and avoid writing outside it unless required.
+- Reusable user-created skills must follow the standard `SKILL.md` layout.
+- Shared system skills are read-only and must not be modified.
 - If a plain text answer would normally be enough, wrap it in simple HTML such as <p>...</p>.
 - When you mention a generated file, prefer a clickable <a href="...">...</a> link.
 - Do not add target attributes, window.open calls, or inline click handlers to links; the frontend controls how links open."""

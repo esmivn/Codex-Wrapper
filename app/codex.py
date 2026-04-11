@@ -662,6 +662,27 @@ def _prepare_isolated_codex_home(user_id: str) -> Path:
     return target_dir
 
 
+def get_user_skill_root(user_id: str) -> Path:
+    configured_root = settings.codex_user_skills_root
+    if not configured_root:
+        return get_user_workspace_root(user_id).expanduser() / ".agents" / "skills"
+
+    target_dir = Path(configured_root).expanduser() / user_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir
+
+
+def get_system_skill_root() -> Optional[Path]:
+    configured_root = settings.codex_system_skills_dir
+    if not configured_root:
+        return None
+
+    target_dir = Path(configured_root).expanduser()
+    if target_dir.is_dir():
+        return target_dir
+    return None
+
+
 def _existing_system_bind_mounts() -> List[tuple[str, str]]:
     candidates = [
         ("/usr", "/usr"),
@@ -687,6 +708,8 @@ def _build_isolated_bwrap_command(
     isolated_codex_home: Path,
 ) -> List[str]:
     user_root = get_user_workspace_root(user_id).expanduser().resolve()
+    user_skill_root = get_user_skill_root(user_id).expanduser().resolve()
+    system_skill_root = get_system_skill_root()
     resolved_workdir = workdir.expanduser().resolve()
     if resolved_workdir != user_root and user_root not in resolved_workdir.parents:
         raise CodexError(
@@ -713,11 +736,16 @@ def _build_isolated_bwrap_command(
         "/home",
         "--dir",
         "/home/codex",
+        "--dir",
+        "/home/codex/.agents",
     ]
     for src, dest in _existing_system_bind_mounts():
         cmd += ["--ro-bind", src, dest]
     cmd += ["--bind", str(user_root), str(user_root)]
+    cmd += ["--bind", str(user_skill_root), "/home/codex/.agents/skills"]
     cmd += ["--bind", str(isolated_codex_home.resolve()), "/home/codex/.codex"]
+    if system_skill_root is not None:
+        cmd += ["--ro-bind", str(system_skill_root.resolve()), "/etc/codex/skills"]
     cmd += ["--chdir", str(resolved_workdir)]
     cmd += inner_cmd
     return cmd

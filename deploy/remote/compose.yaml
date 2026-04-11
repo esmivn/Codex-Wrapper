@@ -11,6 +11,8 @@ services:
       CODEX_DEFAULT_USER_ID: ${CODEX_DEFAULT_USER_ID:-default}
       CODEX_WORKDIR: /workspace/default
       CODEX_ISOLATE_USER_WORKSPACE: ${CODEX_ISOLATE_USER_WORKSPACE:-1}
+      CODEX_SYSTEM_SKILLS_DIR: /codex-host/system-skills
+      CODEX_USER_SKILLS_ROOT: /codex-host/user-skills
       CODEX_PATH: codex
     security_opt:
       - seccomp=unconfined
@@ -20,6 +22,8 @@ services:
     volumes:
       - ${CODEX_AUTH_DIR:-/home/kaleo/.codex}:/home/codex/.codex
       - codex-workspace:/workspace
+      - ${CODEX_SYSTEM_SKILLS_HOST_DIR:-/home/kaleo/codex-system-skills}:/codex-host/system-skills:ro
+      - ${CODEX_USER_SKILLS_HOST_DIR:-/home/kaleo/codex-user-skills}:/codex-host/user-skills
 
 volumes:
   codex-workspace:

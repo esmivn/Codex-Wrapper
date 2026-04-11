@@ -24,6 +24,12 @@ This project loads configuration via environment variables. It supports a `.env`
 - `CODEX_ISOLATE_USER_WORKSPACE`: `0`/`1`. When `1`, the wrapper launches Codex under `bubblewrap` and only bind-mounts the active user's workspace subtree plus required system directories.
   - This blocks access to other users' `/workspace/<user_id>` trees from the isolated Codex process, as long as requests provide a `chat_id` scoped to that user.
   - For non-default users, require `chat_id` so the wrapper can place the process inside the correct user workspace.
+- `CODEX_SYSTEM_SKILLS_DIR`: Container-internal directory containing shared read-only skills. Default `/codex-host/system-skills`.
+  - When present, the isolated Codex process exposes this directory at the official admin skill path `/etc/codex/skills`.
+  - Use this for built-in skills that should be available to every user but never modified by user requests.
+- `CODEX_USER_SKILLS_ROOT`: Container-internal root for per-user custom skills. Default `/codex-host/user-skills`.
+  - The wrapper maps `${CODEX_USER_SKILLS_ROOT}/<user_id>` into each isolated Codex process as the official user skill path `/home/codex/.agents/skills`.
+  - This makes user-defined skills available across chat IDs for the same user while keeping them invisible to other users.
 - `CODEX_CONFIG_DIR`: Optional directory to use as the Codex CLI home for this wrapper. When set, the server exports `CODEX_HOME` for subprocesses and guarantees the folder exists. Place your API-specific `config.toml` here.
   - Leave this unset/empty when running in Docker so the container reuses the bind-mounted `${HOME}/.codex` directory.
   - API 専用の `config.toml` や MCP 設定を分離したい場合に利用します（CLI を直接使う環境と分けられます）。
@@ -44,6 +50,19 @@ This project loads configuration via environment variables. It supports a `.env`
 - `CODEX_TIMEOUT`: Server‑side timeout for Codex runs (seconds; default 120).
 - `CODEX_MAX_PARALLEL_REQUESTS`: Maximum number of Codex subprocesses that may run at once (default 2). Raise this to improve throughput or set `1` to keep the historical serial behaviour. Values `<1` are treated as `1`.
 - `CODEX_ENV_FILE`: Name of the env file to load (set as an OS env var).
+
+### Skill Mount Layout
+
+- Shared/system skills should live on the host as:
+  - `<CODEX_SYSTEM_SKILLS_HOST_DIR>/<skill-name>/SKILL.md`
+- Per-user skills should live on the host as:
+  - `<CODEX_USER_SKILLS_HOST_DIR>/<user_id>/<skill-name>/SKILL.md`
+- Inside the isolated Codex process these appear as:
+  - shared/system: `/etc/codex/skills/<skill-name>/SKILL.md`
+  - user-specific: `/home/codex/.agents/skills/<skill-name>/SKILL.md`
+
+This follows the official Codex skill discovery paths documented at:
+- https://developers.openai.com/codex/skills
 
 ### Model Selection
 
