@@ -39,6 +39,16 @@ def test_chat_ui_static_html_includes_new_chat_controls():
     assert "uploadFiles(fileInput.files)" in html
     assert "content_base64" in html
     assert "renderSessionFiles(payload.files || [])" in html
+    assert 'id="skill-menu"' in html
+    assert '输入 <code>/</code> 可列出当前可用 skills' in html
+    assert 'fetch("/v1/skills"' in html
+    assert "skillMenuEl" in html
+    assert "loadSkills" in html
+    assert "refreshSkillMenu" in html
+    assert "applySkillSelection" in html
+    assert 'promptInput.value = `$${skill.name} `;' in html
+    assert 'skillScopeLabel' in html
+    assert 'skill-menu' in html
     assert "Enter 发送，Shift + Enter 换行" in html
     assert "grid-template-columns: 300px minmax(0, 1fr) 280px;" in html
     assert "chat_id" in html

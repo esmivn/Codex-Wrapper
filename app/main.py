@@ -20,7 +20,7 @@ from .auth import (
     list_users,
 )
 from .codex import CodexError, run_codex, run_codex_last_message
-from .codex import get_system_skill_root, get_user_skill_root
+from .codex import get_system_skill_root, get_user_skill_root, list_visible_skills
 from .config import settings
 from .deps import get_current_user, get_request_user_id, rate_limiter, require_admin, verify_api_key
 from .model_registry import (
@@ -165,8 +165,10 @@ def _build_session_context_prefix(
     session_files: list[dict[str, Any]] | None = None,
 ) -> str:
     public_base = _workspace_public_base(request, user_id, chat_id)
-    user_skill_root = get_user_skill_root(user_id)
-    system_skill_root = get_system_skill_root()
+    host_user_skill_root = get_user_skill_root(user_id)
+    host_system_skill_root = get_system_skill_root()
+    codex_user_skill_root = Path("/home/codex/.agents/skills")
+    codex_system_skill_root = Path("/etc/codex/skills")
     files_block = ""
     visible_files = session_files or []
     if visible_files:
@@ -180,12 +182,15 @@ def _build_session_context_prefix(
         f"- user_id: {user_id}\n"
         f"- chat_id: {chat_id}\n"
         f"- current working directory: {workdir}\n"
-        f"- user-writable skills directory: {user_skill_root}\n"
-        f"- shared read-only skills directory: {system_skill_root or '/etc/codex/skills'}\n"
+        f"- user-writable skills directory inside your process: {codex_user_skill_root}\n"
+        f"- shared read-only skills directory inside your process: {codex_system_skill_root}\n"
+        f"- those user skills are persisted back to host storage at: {host_user_skill_root}\n"
+        f"- those shared read-only skills are host-mounted from: {host_system_skill_root or codex_system_skill_root}\n"
         f"- files created in this directory are publicly accessible at: {public_base}<relative-path>\n"
         f"- if you create `test.html` in the working directory, share this link: {public_base}test.html\n"
         "- keep generated files inside the current working directory so the user can open them in a browser.\n"
         "- create or update user-specific reusable skills under the user-writable skills directory using the standard `SKILL.md` layout.\n"
+        "- when you create a user skill, write it to the in-process path `/home/codex/.agents/skills/<skill-name>/SKILL.md`, not to `/codex-host/...`.\n"
         "- every user-created skill must be stored as `<skill-name>/SKILL.md` and start with front matter like:\n"
         "  ---\n"
         "  name: example-skill\n"
@@ -312,6 +317,13 @@ async def list_models():
     return {
         "data": [{"id": model} for model in get_available_models(include_reasoning_aliases=True)],
         "default_model": get_preferred_model_label(),
+    }
+
+
+@app.get("/v1/skills", dependencies=[Depends(rate_limiter), Depends(verify_api_key)])
+async def list_skills(user_id: str = Depends(get_request_user_id)):
+    return {
+        "data": list_visible_skills(user_id=user_id)
     }
 
 

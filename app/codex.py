@@ -683,6 +683,28 @@ def get_system_skill_root() -> Optional[Path]:
     return None
 
 
+def get_builtin_skill_root() -> Optional[Path]:
+    candidates: List[Path] = []
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        candidates.append(Path(codex_home).expanduser() / "skills" / ".system")
+    candidates.extend(
+        [
+            Path("/home/codex/.codex/skills/.system"),
+            Path.home() / ".codex" / "skills" / ".system",
+        ]
+    )
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.expanduser()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.is_dir():
+            return resolved
+    return None
+
+
 def _skill_front_matter_lines(skill_name: str, description: str) -> List[str]:
     return [
         "---",
@@ -691,6 +713,13 @@ def _skill_front_matter_lines(skill_name: str, description: str) -> List[str]:
         "---",
         "",
     ]
+
+
+def _clean_skill_metadata_value(value: str) -> str:
+    cleaned = value.strip()
+    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {'"', "'"}:
+        return cleaned[1:-1].strip()
+    return cleaned
 
 
 def _split_skill_front_matter(text: str) -> tuple[Optional[dict[str, str]], str]:
@@ -710,8 +739,61 @@ def _split_skill_front_matter(text: str) -> tuple[Optional[dict[str, str]], str]
         if not line or ":" not in line:
             continue
         key, value = line.split(":", 1)
-        metadata[key.strip().lower()] = value.strip()
+        metadata[key.strip().lower()] = _clean_skill_metadata_value(value)
     return metadata, body
+
+
+def read_skill_metadata(skill_file: Path) -> Optional[dict[str, str]]:
+    if not skill_file.is_file():
+        return None
+
+    raw = skill_file.read_text(encoding="utf-8", errors="ignore")
+    metadata, body = _split_skill_front_matter(raw)
+    skill_name = skill_file.parent.name.strip() or "unnamed-skill"
+
+    if metadata is None:
+        description = ""
+        for line in body.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or stripped == "---":
+                continue
+            description = stripped
+            break
+        return {
+            "name": skill_name,
+            "description": description,
+        }
+
+    return {
+        "name": _clean_skill_metadata_value(metadata.get("name", "").strip() or skill_name),
+        "description": _clean_skill_metadata_value(metadata.get("description", "").strip()),
+    }
+
+
+def list_visible_skills(user_id: str) -> List[dict[str, str]]:
+    entries_by_name: Dict[str, dict[str, str]] = {}
+
+    def _ingest(root: Optional[Path], scope: str) -> None:
+        if root is None or not root.is_dir():
+            return
+        for skill_file in sorted(root.glob("*/SKILL.md")):
+            metadata = read_skill_metadata(skill_file)
+            if not metadata:
+                continue
+            name = metadata["name"].strip()
+            if not name:
+                continue
+            entries_by_name[name] = {
+                "name": name,
+                "description": metadata.get("description", "").strip(),
+                "scope": scope,
+            }
+
+    _ingest(get_builtin_skill_root(), "builtin")
+    _ingest(get_system_skill_root(), "shared")
+    _ingest(get_user_skill_root(user_id), "user")
+
+    return sorted(entries_by_name.values(), key=lambda item: (item["scope"] != "user", item["scope"] != "shared", item["name"]))
 
 
 def _ensure_skill_front_matter(skill_dir: Path) -> bool:

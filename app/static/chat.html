@@ -582,6 +582,93 @@
       margin-bottom: 12px;
     }
 
+    .skill-menu {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: min(320px, 46vh);
+      padding: 10px;
+      margin-bottom: 12px;
+      overflow: auto;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: rgba(255, 252, 246, 0.97);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    body[data-theme="dark"] .skill-menu {
+      background: rgba(18, 25, 32, 0.98);
+    }
+
+    .skill-menu.hidden {
+      display: none;
+    }
+
+    .skill-item,
+    .skill-menu-state {
+      width: 100%;
+      border-radius: 14px;
+      text-align: left;
+    }
+
+    .skill-item {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      padding: 10px 12px;
+    }
+
+    .skill-item:hover,
+    .skill-item.active {
+      background: rgba(13, 122, 95, 0.08);
+      border-color: rgba(13, 122, 95, 0.2);
+      transform: none;
+    }
+
+    body[data-theme="dark"] .skill-item:hover,
+    body[data-theme="dark"] .skill-item.active {
+      background: rgba(36, 169, 133, 0.14);
+      border-color: rgba(95, 215, 192, 0.22);
+    }
+
+    .skill-item-name {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .skill-item-meta {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .skill-item-scope {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .skill-menu-state {
+      border: 1px dashed rgba(58, 47, 34, 0.16);
+      color: var(--muted);
+      padding: 12px;
+      font-size: 0.84rem;
+      line-height: 1.5;
+      background: rgba(255,255,255,0.4);
+    }
+
+    body[data-theme="dark"] .skill-menu-state {
+      border-color: rgba(187, 211, 226, 0.18);
+      background: rgba(255,255,255,0.04);
+    }
+
     .upload-panel {
       margin-bottom: 12px;
     }
@@ -1228,13 +1315,14 @@
               <input id="file-input" class="hidden-control" type="file" multiple />
               <span class="upload-note">上传后的文件会保存到当前会话目录，并自动提供给 Codex 使用。</span>
             </div>
-            <div id="session-files" class="file-list"></div>
+          <div id="session-files" class="file-list"></div>
           </div>
+          <div id="skill-menu" class="skill-menu hidden"></div>
           <textarea id="prompt" placeholder="输入你想让代理执行的任务"></textarea>
           <div class="actions">
             <button id="send" class="primary" type="button">发送</button>
           </div>
-          <div class="footer-note">Enter 发送，Shift + Enter 换行。发送时会自动携带当前对话历史，并把会话绑定到 URL 里的 <code>chat_id</code>。</div>
+          <div class="footer-note">Enter 发送，Shift + Enter 换行。输入 <code>/</code> 可列出当前可用 skills。发送时会自动携带当前对话历史，并把会话绑定到 URL 里的 <code>chat_id</code>。</div>
         </div>
       </section>
 
@@ -1268,6 +1356,7 @@
     const recentSessionsEl = document.getElementById("recent-sessions");
     const recentEmptyEl = document.getElementById("recent-empty");
     const sessionFilesEl = document.getElementById("session-files");
+    const skillMenuEl = document.getElementById("skill-menu");
 
     // Auth DOM refs
     const loginOverlay = document.getElementById("login-overlay");
@@ -1342,12 +1431,142 @@
     let allModelIds = [];
     let preferredDefaultModel = "";
     let currentSessionFiles = [];
+    let allSkills = [];
+    let filteredSkills = [];
+    let activeSkillIndex = 0;
+    let skillsDirty = true;
+    let skillsLoadedForUser = "";
     let rememberedModelSelection = "";
     let currentTheme = "light";
     const messageState = new WeakMap();
 
     function setStatus(text) {
       statusEl.textContent = text;
+    }
+
+    function skillScopeLabel(scope) {
+      if (scope === "user") {
+        return "USER";
+      }
+      if (scope === "shared") {
+        return "SHARED";
+      }
+      return "BUILT-IN";
+    }
+
+    function hideSkillMenu() {
+      filteredSkills = [];
+      activeSkillIndex = 0;
+      skillMenuEl.classList.add("hidden");
+      skillMenuEl.innerHTML = "";
+    }
+
+    function renderSkillMenu(items, { emptyMessage = "" } = {}) {
+      skillMenuEl.innerHTML = "";
+      if (!items.length) {
+        const state = document.createElement("div");
+        state.className = "skill-menu-state";
+        state.textContent = emptyMessage || "没有匹配的 skill。";
+        skillMenuEl.appendChild(state);
+        skillMenuEl.classList.remove("hidden");
+        return;
+      }
+
+      items.forEach((item, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "skill-item";
+        if (index === activeSkillIndex) {
+          button.classList.add("active");
+        }
+        button.dataset.skillName = item.name;
+
+        const name = document.createElement("span");
+        name.className = "skill-item-name";
+        name.textContent = `$${item.name}`;
+        button.appendChild(name);
+
+        const meta = document.createElement("span");
+        meta.className = "skill-item-meta";
+        meta.innerHTML = `<span class="skill-item-scope">${skillScopeLabel(item.scope)}</span>${item.description ? ` · ${escapeHtml(item.description)}` : ""}`;
+        button.appendChild(meta);
+
+        button.addEventListener("click", () => {
+          applySkillSelection(item);
+        });
+        skillMenuEl.appendChild(button);
+      });
+      skillMenuEl.classList.remove("hidden");
+    }
+
+    async function loadSkills({ force = false } = {}) {
+      const currentSkillUser = defaultUserId || "default";
+      if (!force && !skillsDirty && allSkills.length && skillsLoadedForUser === currentSkillUser) {
+        return allSkills;
+      }
+      const response = await fetch("/v1/skills", {
+        headers: {
+          ...authHeaders()
+        }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail || payload));
+      }
+      allSkills = Array.isArray(payload.data) ? payload.data.filter((item) => item && typeof item.name === "string") : [];
+      skillsDirty = false;
+      skillsLoadedForUser = currentSkillUser;
+      return allSkills;
+    }
+
+    function currentSkillQuery() {
+      const value = promptInput.value;
+      const trimmed = value.trimStart();
+      if (!trimmed.startsWith("/")) {
+        return null;
+      }
+      if (trimmed.includes("\n")) {
+        return null;
+      }
+      return trimmed.slice(1).trim().toLowerCase();
+    }
+
+    async function refreshSkillMenu() {
+      const query = currentSkillQuery();
+      if (query === null) {
+        hideSkillMenu();
+        return;
+      }
+
+      if (!allSkills.length) {
+        skillMenuEl.innerHTML = '<div class="skill-menu-state">正在加载 skills...</div>';
+        skillMenuEl.classList.remove("hidden");
+        try {
+          await loadSkills();
+        } catch (error) {
+          skillMenuEl.innerHTML = "";
+          const state = document.createElement("div");
+          state.className = "skill-menu-state";
+          state.textContent = `加载 skills 失败：${error.message}`;
+          skillMenuEl.appendChild(state);
+          skillMenuEl.classList.remove("hidden");
+          return;
+        }
+      }
+
+      filteredSkills = allSkills.filter((item) => {
+        const name = String(item.name || "").toLowerCase();
+        const description = String(item.description || "").toLowerCase();
+        return !query || name.includes(query) || description.includes(query);
+      });
+      activeSkillIndex = 0;
+      renderSkillMenu(filteredSkills, { emptyMessage: "没有匹配的 skill。" });
+    }
+
+    function applySkillSelection(skill) {
+      promptInput.value = `$${skill.name} `;
+      hideSkillMenu();
+      promptInput.focus();
     }
 
     function applyTheme(theme) {
@@ -1456,10 +1675,14 @@
         userDisplayName.textContent = currentUser.username;
         userDisplayRole.textContent = currentUser.role;
         btnAdmin.style.display = currentUser.role === "admin" ? "" : "none";
+        allSkills = [];
+        skillsDirty = true;
+        skillsLoadedForUser = "";
       } else {
         loginOverlay.classList.remove("hidden");
         userBarEl.style.display = "none";
         adminOverlay.classList.add("hidden");
+        hideSkillMenu();
       }
     }
 
@@ -1479,6 +1702,7 @@
         setAuthState(body.token, body.user);
         // After login, initialize the app
         ensureChatId({ replace: true });
+        loadSkills().catch(() => {});
         loadModels();
         loadConversation();
         loadRecentSessions();
@@ -2387,6 +2611,7 @@ ${fragment}
       persistSettings();
       addConversationMessage("user", text);
       promptInput.value = "";
+      hideSkillMenu();
       sendButton.disabled = true;
       reloadModelsButton.disabled = true;
       newChatButton.disabled = true;
@@ -2438,6 +2663,8 @@ ${fragment}
           }
           renderMessageContent(assistantNode, "assistant", content, { final: true, modelLabel: resolvedModelLabel });
           conversation.push({ role: "assistant", content, model: resolvedModelLabel });
+          skillsDirty = true;
+          loadSkills({ force: true }).catch(() => {});
           setStatus("完成");
           loadRecentSessions();
           return;
@@ -2485,6 +2712,8 @@ ${fragment}
         }
         renderMessageContent(assistantNode, "assistant", finalText, { final: true, modelLabel: resolvedModelLabel });
         conversation.push({ role: "assistant", content: finalText, model: resolvedModelLabel });
+        skillsDirty = true;
+        loadSkills({ force: true }).catch(() => {});
         setStatus("完成");
         loadRecentSessions();
       } catch (error) {
@@ -2517,6 +2746,7 @@ ${fragment}
       updateChatUrl(currentChatId);
       applySessionUi();
       resetConversationState();
+      hideSkillMenu();
       setStatus(statusText);
       loadRecentSessions();
     }
@@ -2541,8 +2771,35 @@ ${fragment}
       uploadFiles(fileInput.files);
     });
     sendButton.addEventListener("click", sendMessage);
+    promptInput.addEventListener("input", () => {
+      refreshSkillMenu();
+    });
     promptInput.addEventListener("keydown", (event) => {
       if (event.isComposing) {
+        return;
+      }
+      if (!skillMenuEl.classList.contains("hidden") && filteredSkills.length) {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          activeSkillIndex = Math.min(filteredSkills.length - 1, activeSkillIndex + 1);
+          renderSkillMenu(filteredSkills);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          activeSkillIndex = Math.max(0, activeSkillIndex - 1);
+          renderSkillMenu(filteredSkills);
+          return;
+        }
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          applySkillSelection(filteredSkills[activeSkillIndex]);
+          return;
+        }
+      }
+      if (event.key === "Escape" && !skillMenuEl.classList.contains("hidden")) {
+        event.preventDefault();
+        hideSkillMenu();
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
@@ -2599,6 +2856,7 @@ ${fragment}
       const authenticated = await restoreAuth();
       if (authenticated) {
         ensureChatId({ replace: true });
+        loadSkills().catch(() => {});
         loadModels();
         loadConversation();
         loadRecentSessions();
@@ -2679,6 +2937,16 @@ ${fragment}
       activeResize.element.classList.remove("resizing");
       activeResize.handle.classList.remove("active");
       activeResize = null;
+    });
+
+    document.addEventListener("click", (event) => {
+      if (skillMenuEl.classList.contains("hidden")) {
+        return;
+      }
+      if (event.target === promptInput || skillMenuEl.contains(event.target)) {
+        return;
+      }
+      hideSkillMenu();
     });
   </script>
 </body>
