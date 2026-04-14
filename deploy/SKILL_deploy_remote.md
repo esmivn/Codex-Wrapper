@@ -145,6 +145,34 @@ ssh <remote> "cd ~/codex-wrapper-deploy && sudo -n docker compose -f compose.yam
 - 卷挂载更新
 - `security_opt` 更新
 
+### 重建后必须立即核对环境变量是否真的进入容器
+
+不要只看远端部署目录里的 `~/codex-wrapper-deploy/.env`。
+
+至少要核对三层：
+
+1. 部署目录 `.env`
+2. `docker compose config` 的渲染结果
+3. 运行中容器的真实环境变量
+
+建议直接执行：
+
+```bash
+ssh <remote> "cat ~/codex-wrapper-deploy/.env"
+ssh <remote> "cd ~/codex-wrapper-deploy && sudo -n docker compose -f compose.yaml config | sed -n '/environment:/,/volumes:/p'"
+ssh <remote> "sudo -n docker inspect codex-wrapper --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(OPENROUTER_|CODEX_|PROXY_)'"
+```
+
+如果这三层不一致，不能认为部署成功。
+
+这一步在更新以下配置时尤其重要：
+
+- `OPENROUTER_BASE_URL`
+- `OPENROUTER_API_KEY`
+- `CODEX_WORKDIR`
+- `CODEX_ISOLATE_USER_WORKSPACE`
+- `CODEX_APPROVAL_POLICY`
+
 ## 九、当前远端部署的关键要求
 
 ### 1. 需要 `seccomp=unconfined`
@@ -241,6 +269,32 @@ docker compose up -d --force-recreate
 2. `docker save | ssh ... docker load`
 3. 远端 `docker compose up -d --force-recreate`
 
+### 热补和重建的顺序风险
+
+如果你先热补代码，再执行 `docker compose up -d --force-recreate`：
+
+- 热补代码会被镜像里的旧代码覆盖
+- 容器重建后会回到镜像内版本
+
+所以遇到“环境变量需要更新，同时又要 patch 某个 Python 文件”的场景，顺序应明确：
+
+1. 先更新 `.env` / `compose.yaml`
+2. 执行 `docker compose up -d --force-recreate`
+3. 再把尚未进入镜像的代码 patch 进新容器
+4. 再重启容器
+5. 再做验证
+
+否则很容易出现：
+
+- `.env` 是新的
+- 容器环境也是新的
+- 但代码退回旧镜像内容
+
+或者相反：
+
+- 代码是新的
+- 但容器环境还是旧值
+
 ### 快速 Patch 后的最低验证
 
 至少做：
@@ -318,6 +372,90 @@ curl -sS http://<host>:8020/v1/models
 期望：
 
 - 文件实际出现在 `/workspace/default/<chat_id>/123.txt`
+
+### 5. 代理模型发现是否真的成功
+
+如果使用 OpenRouter 或 OpenRouter-compatible proxy，不能只看 `OPENROUTER_BASE_URL` 是否配置了，还要验证：
+
+1. 代理本身可访问
+2. wrapper 的 `/v1/models` 确实列出代理模型
+3. wrapper 的聊天请求能真正使用代理模型
+
+建议顺序：
+
+```bash
+# 先直接测代理
+curl -sS -H "Authorization: Bearer <TOKEN>" \
+  <OPENROUTER_BASE_URL>/models
+
+# 再测 wrapper
+curl -sS http://<host>:8020/v1/models
+
+curl -i -sS -H 'Content-Type: application/json' \
+  -d '{"model":"google/gemma-4-31b-it","messages":[{"role":"user","content":"Reply with exactly: ok"}],"stream":false}' \
+  http://<host>:8020/v1/chat/completions
+```
+
+聊天请求成功时，优先确认这些 header：
+
+- `X-Codex-Requested-Model`
+- `X-Codex-Resolved-Model`
+- `X-Codex-Resolved-Provider`
+- `X-Codex-Fallback-Applied`
+
+如果 `fallback_applied=true`，或者 `resolved_model` 不是你请求的模型，就不能认为代理接入已经成功。
+
+### 6. 如果代理 `/models` 失败，必须抓完整错误体
+
+只看状态码不够。
+
+建议在远端容器里直接抓完整响应体，例如：
+
+```bash
+docker exec codex-wrapper sh -lc 'python3 - <<'"'"'PY'"'"'
+from urllib import request, error
+url = "<OPENROUTER_BASE_URL>/models"
+req = request.Request(url, headers={
+    "Authorization": "Bearer <TOKEN>",
+    "Accept": "application/json",
+})
+try:
+    with request.urlopen(req, timeout=15) as resp:
+        print(resp.status)
+        print(resp.read().decode("utf-8")[:2000])
+except error.HTTPError as exc:
+    print(exc.code)
+    print(exc.read().decode("utf-8", errors="ignore")[:4000])
+PY'
+```
+
+原因：
+
+- 有些问题不是 token 错
+- 也不是地址错
+- 而是 CDN / Cloudflare / WAF 拦截了请求签名
+
+例如这次真实遇到的是：
+
+- `403`
+- Cloudflare `Error 1010`
+- `browser_signature_banned`
+
+### 7. 对经 Cloudflare/CDN 的代理，建议固定请求 User-Agent
+
+如果模型发现代码使用 Python 默认 `urllib` 签名，请求可能会被 CDN/WAF 拦截。
+
+实际排障时应优先比较：
+
+- 直接 `curl` 到代理能否成功
+- 同容器里 Python `urllib` 请求能否成功
+
+如果 `curl` 成功、Python 默认请求失败，就很可能是请求签名被拦。
+
+这种情况下：
+
+- 需要在模型发现请求里显式设置一个正常的 `User-Agent`
+- 修改后再重启服务并重测 `/v1/models`
 - 可通过 HTTP 访问
 
 ### 5. 用户隔离是否仍然成立

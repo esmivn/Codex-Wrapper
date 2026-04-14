@@ -67,7 +67,7 @@ def test_resolve_model_request_uses_openrouter_when_available(monkeypatch):
     monkeypatch.setattr(
         model_registry.settings,
         "openrouter_base_url",
-        "https://openrouter.ai/api/v1",
+        "http://proxy.internal:57631/api/openrouter",
         raising=False,
     )
     monkeypatch.setattr(
@@ -95,7 +95,7 @@ def test_resolve_model_request_uses_openrouter_when_available(monkeypatch):
     }
     assert provider_cfg == {
         "model_provider": "openrouter",
-        "model_providers.openrouter": '{ name = "OpenRouter", base_url = "https://openrouter.ai/api/v1", env_key = "OPENROUTER_API_KEY", wire_api = "responses" }',
+        "model_providers.openrouter": '{ name = "OpenRouter", base_url = "http://proxy.internal:57631/api/openrouter", env_key = "OPENROUTER_API_KEY", wire_api = "responses" }',
     }
     assert display == "openai/gpt-5.1 high"
 
@@ -114,3 +114,47 @@ def test_resolve_model_request_falls_back_without_openrouter_key(monkeypatch):
     assert env is None
     assert provider_cfg is None
     assert display == "gpt-5.1 high"
+
+
+def test_load_openrouter_models_uses_proxy_models_endpoint(monkeypatch):
+    monkeypatch.setattr(model_registry.settings, "openrouter_api_key", "proxy-token", raising=False)
+    monkeypatch.setattr(
+        model_registry.settings,
+        "openrouter_base_url",
+        "http://proxy.internal:57631/api/openrouter",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        model_registry.settings,
+        "openrouter_model",
+        "openai/gpt-5.1",
+        raising=False,
+    )
+
+    captured = {}
+
+    class _FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"data":[{"id":"google/gemma-4-31b-it"}]}'
+
+    def _fake_urlopen(req, timeout=0):
+        captured["url"] = req.full_url
+        captured["headers"] = dict(req.header_items())
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setattr(model_registry.request, "urlopen", _fake_urlopen)
+
+    models = model_registry._load_openrouter_models()
+
+    assert captured["url"] == "http://proxy.internal:57631/api/openrouter/models"
+    assert captured["headers"]["Authorization"] == "Bearer proxy-token"
+    assert captured["headers"]["User-agent"] == model_registry.OPENROUTER_DISCOVERY_USER_AGENT
+    assert captured["timeout"] == 10
+    assert models == ["openai/gpt-5.1", "google/gemma-4-31b-it"]

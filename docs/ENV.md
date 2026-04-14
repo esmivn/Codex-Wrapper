@@ -46,7 +46,10 @@ This project loads configuration via environment variables. It supports a `.env`
 - `CODEX_HIDE_REASONING`: `0`/`1`. When `1`, the wrapper asks Codex CLI to suppress "thinking" output (`hide_agent_reasoning=true`). Default `0` keeps the CLI’s standard behaviour.
 - `CODEX_LOCAL_ONLY`: `0`/`1`. When `1`, the server rejects non‑local provider base URLs.
 - `CODEX_ALLOW_DANGER_FULL_ACCESS`: `0`/`1`. When `1`, the API may request `x_codex.sandbox=danger-full-access`.
-- `OPENROUTER_API_KEY`: Optional OpenRouter API key when you want OpenRouter-backed models to remain available after container restarts.
+- `OPENROUTER_API_KEY`: Optional bearer token used to authenticate against an OpenRouter-compatible proxy.
+- `OPENROUTER_BASE_URL`: Base URL of the OpenRouter-compatible proxy.
+  - Set this to your proxy root, for example `http://proxy-host:57631/api/openrouter`.
+  - The wrapper discovers proxy-backed models from `GET <OPENROUTER_BASE_URL>/models`.
 - `CODEX_TIMEOUT`: Server‑side timeout for Codex runs (seconds; default 120).
 - `CODEX_MAX_PARALLEL_REQUESTS`: Maximum number of Codex subprocesses that may run at once (default 2). Raise this to improve throughput or set `1` to keep the historical serial behaviour. Values `<1` are treated as `1`.
 - `CODEX_ENV_FILE`: Name of the env file to load (set as an OS env var).

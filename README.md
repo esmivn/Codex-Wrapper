@@ -239,6 +239,7 @@ Codex highlights
 
 Provider‑specific env vars
 - With the OpenAI provider in API‑key mode, Codex CLI reads `OPENAI_API_KEY`. This belongs to Codex, not this wrapper (OAuth mode does not require it).
+- For OpenRouter-backed models in this wrapper, point `OPENROUTER_BASE_URL` at your OpenRouter-compatible proxy and put the proxy bearer token in `OPENROUTER_API_KEY`.
 - For custom providers or local inference (e.g., `ollama`), edit `~/.codex/config.toml` `model_providers` to set `base_url`, etc.
 
 See `.env.example` for a template.

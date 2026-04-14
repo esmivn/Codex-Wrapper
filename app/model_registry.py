@@ -1,4 +1,4 @@
-"""Utility helpers for discovering and caching Codex/OpenRouter models."""
+"""Utility helpers for discovering and caching Codex/OpenRouter-proxy models."""
 
 import json
 import logging
@@ -27,6 +27,7 @@ _WARNED_LEGACY_ENV = False
 REASONING_EFFORT_SUFFIXES = ("low", "medium", "high", "xhigh")
 OPENROUTER_FALLBACK_MODEL = "gpt-5.1"
 OPENROUTER_FALLBACK_EFFORT = "high"
+OPENROUTER_DISCOVERY_USER_AGENT = "curl/8.7.1"
 
 
 def _augment_models(models: List[str]) -> List[str]:
@@ -261,12 +262,13 @@ def _load_openrouter_models() -> List[str]:
 
     models: List[str] = []
     api_key = settings.openrouter_api_key.strip()
-    endpoint = settings.openrouter_base_url.rstrip("/") + "/models/user"
+    endpoint = settings.openrouter_base_url.rstrip("/") + "/models"
     req = request.Request(
         endpoint,
         headers={
             "Authorization": f"Bearer {api_key}",
             "Accept": "application/json",
+            "User-Agent": OPENROUTER_DISCOVERY_USER_AGENT,
         },
     )
 
