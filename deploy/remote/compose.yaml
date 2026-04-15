@@ -1,3 +1,8 @@
+# Use this file for the shared remote service deployed on a host machine.
+# It assumes one long-lived `codex-wrapper` container serves many users, while
+# per-user workspace isolation is enforced inside the container by the wrapper.
+# Prefer this for the current remote machine when you want a single endpoint
+# such as `http://<host>:8020` for all users.
 services:
   codex-wrapper:
     init: true

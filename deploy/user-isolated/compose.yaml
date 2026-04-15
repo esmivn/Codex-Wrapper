@@ -1,3 +1,8 @@
+# Use this file when each user should get a dedicated container instance.
+# It is the stronger isolation option: one container per `USER_ID`, one host
+# workspace mount per user, and a separate host port per instance.
+# Prefer this when tenant isolation requirements are stricter than the shared
+# remote service model, or when you want operational separation per user.
 services:
   codex-wrapper:
     init: true

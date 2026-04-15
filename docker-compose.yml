@@ -1,3 +1,7 @@
+# Use this file for local development or single-machine testing from the repo.
+# It builds the image from the current working tree and mounts local paths.
+# Prefer this when you are iterating on code locally and want `docker compose`
+# to reflect the repository state without preparing a remote deployment bundle.
 services:
   codex-wrapper:
     init: true
